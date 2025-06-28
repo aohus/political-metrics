@@ -34,7 +34,7 @@ Thumbs.db
 *.log
 
 # 임시 파일
-*/temp
+/temp
 *.tmp
 *.temp
 
