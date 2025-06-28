@@ -40,3 +40,9 @@ Thumbs.db
 
 data/
 *.db
+
+# Node.js (React 프로젝트인 경우)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
