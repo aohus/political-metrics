@@ -2,12 +2,11 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
+from schema.utils import BillStatus, Gender
 from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.orm import declarative_base, relationship
-
-from schema.utils import BillStatus, Gender
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -221,3 +220,25 @@ class CommitteeMember(Base):
             f"<CommitteeMember(COMMITTEE_NAME='{self.COMMITTEE_NAME}', "
             f"MEMBER_ID='{self.MEMBER_ID}', MEMBER_TYPE='{self.MEMBER_TYPE}')>"
         )
+
+
+class MemberBillStatistic(Base):
+    """국회의원 의안관련 통계 테이블"""
+
+    __tablename__ = "member_bill_statistics"
+    MEMBER_ID = Column(
+        String(50), ForeignKey("members.MEMBER_ID"), primary_key=True, comment="의원ID"
+    )  # 필수 필드
+    total_count = Column(Integer, nullable=False, comment="총 발의 의안 수")
+    total_pass_rate = Column(Float, nullable=False, comment="의안 통과율")
+    lead_count = Column(Integer, nullable=False, comment="대표 발의 의안 수")
+    lead_pass_rate = Column(Float, nullable=False, comment="대표 발의 의안 통과율")
+    co_count = Column(Integer, nullable=False, comment="공동 발의 의안 수")
+    co_pass_rate = Column(Float, nullable=False, comment="공동 발의 의안 통과율")
+    updated_at = Column(DateTime, default=datetime.now, comment="최종 수정 일시")
+
+    # 관계 정의
+    member = relationship("Member", back_populates="member_bill_stats")
+
+    def __repr__(self):
+        return f"<MemberBillStatistics(MEMBER_ID='{self.MEMBER_ID}', "

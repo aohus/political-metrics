@@ -3,7 +3,7 @@ from typing import Optional
 
 
 @dataclass
-class MemberBillStatistics:
+class MemberBillStatistic:
     total_count: int
     total_pass_rate: float
     lead_count: int
@@ -14,7 +14,7 @@ class MemberBillStatistics:
 
 
 @dataclass
-class MemberCommitteeStatistics:
+class MemberCommitteeStatistic:
     active_committee: str
     total_count: int
     lead_count: int
@@ -22,7 +22,7 @@ class MemberCommitteeStatistics:
 
 
 @dataclass
-class BillStatistics:
+class BillStatistic:
     bill_code: str
     bill_name: str
     bill_committee: str
@@ -35,16 +35,20 @@ class MemberStatisticsCalculator:
 
     def calculate_bill_statistics(
         self, member_id: str
-    ) -> list[MemberBillStatistics]: ...
+    ) -> list[MemberBillStatistic]: ...
 
     def calculate_committee_statistics(
         self, member_id: str
-    ) -> list[MemberCommitteeStatistics]: ...
+    ) -> list[MemberCommitteeStatistic]: ...
 
     def get_top_members_by_criteria(
         self, criterial: str, limit: int = 10
-    ) -> list[MemberBillStatistics]: ...
+    ) -> list[MemberBillStatistic]: ...
 
 
 class BillStatisticsCalculator:
+    def get_top_bills_by_criteria(self, criteria: str, limit: int = 10): ...
+
+
+class CommitteeStatisticsCalculator:
     def get_top_bills_by_criteria(self, criteria: str, limit: int = 10): ...

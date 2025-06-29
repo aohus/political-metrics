@@ -22,7 +22,6 @@ from model.orm import (
 from response.response import APIResponse, BillResponse, MemberResponse
 from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.orm import Session, aliased, joinedload
-
 from src.service.bill_analizer import MemberBillStatisticsCalculator
 
 # 로깅 설정
