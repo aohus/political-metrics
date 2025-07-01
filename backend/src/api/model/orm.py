@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from schema.utils import BillStatus, Gender
+from core.schema.utils import BillStatus, Gender
 from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Integer, String
@@ -72,6 +72,7 @@ class Member(Base):
     histories = relationship("MemberHistory", back_populates="member")
     proposed_bills = relationship("BillProposer", back_populates="proposer")
     committee_memberships = relationship("CommitteeMember", back_populates="member")
+    member_bill_stats = relationship("MemberBillStatistic", back_populates="member")
 
     def __repr__(self):
         return f"<Member(MEMBER_ID='{self.MEMBER_ID}', NAAS_NM='{self.NAAS_NM}')>"
@@ -241,4 +242,7 @@ class MemberBillStatistic(Base):
     member = relationship("Member", back_populates="member_bill_stats")
 
     def __repr__(self):
-        return f"<MemberBillStatistics(MEMBER_ID='{self.MEMBER_ID}', "
+        return (
+            f"<MemberBillStatistic(MEMBER_ID='{self.MEMBER_ID}'"
+            f"total_count={self.total_count})>"
+        )

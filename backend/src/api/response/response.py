@@ -3,31 +3,53 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..service.analyzer import (
-    BillStatistics,
-    MemberBillStatistics,
-    MemberCommitteeStatistics,
-)
-
 
 class MemberResponse(BaseModel):
-    MEMBER_ID: str = Field(..., description="의원ID")
     NAAS_NM: str = Field(..., description="의원명")
     BIRDY_DT: Optional[str] = None
     PLPT_NM: Optional[str] = None
-    ELECD_DIV_NM: Optional[str] = None
-    CMIT_NM: Optional[str] = None
+    GTELT_ERACO: Optional[str] = None
+    ELECD_NM: Optional[str] = None
+    BLNG_CMIT_NM: Optional[str] = None
     NAAS_PIC: Optional[str] = None
-
-
-class MemberStatisticsResponse(BaseModel):
-    member_info: MemberResponse = None
-    bill_stats: Optional[MemberBillStatistics] = None
-    committee_stats: Optional[list[MemberCommitteeStatistics]] = None
+    BRF_HST: Optional[str] = None
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 
-class BillStatisticsResponse(BaseModel):
+class MemberBillStatistic(BaseModel):
+    total_count: int
+    total_pass_rate: float = Field(0.0, description="가결률(%)")
+    lead_count: int
+    lead_pass_rate: float = Field(0.0, description="가결률(%)")
+    co_count: int
+    co_pass_rate: float = Field(0.0, description="가결률(%)")
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
+
+
+class MemberCommitteeStatistic(BaseModel):
+    active_committee: str
+    total_count: int
+    lead_count: int
+    co_count: int
+
+
+class BillStatistic(BaseModel):
+    bill_code: str
+    bill_name: str
+    bill_committee: str
+    bill_count: int
+    bill_pass_rate: float
+# avg_processing_days: float = Field(0.0, description="평균 처리기간(일)")
+
+
+class MemberStatisticResponse(BaseModel):
+    member_info: MemberResponse = None
+    bill_stats: MemberBillStatistic = None
+    committee_stats: list[MemberCommitteeStatistic] = None
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
+
+
+class BillStatisticResponse(BaseModel):
     bill_code: str
     bill_name: str
     bill_committee: str
@@ -60,9 +82,9 @@ class APIResponse(BaseModel):
         Union[
             Dict[str, Any],
             List[Any],
-            MemberStatisticsResponse,
-            list[MemberStatisticsResponse],
-            list[BillStatistics],
+            MemberStatisticResponse,
+            list[MemberStatisticResponse],
+            list[BillStatistic],
         ]
     ] = Field(
         None, description="응답 데이터"

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, root_validator, validator
 class PydanticDBGenerator:
     """Pydantic 모델을 기반으로 DB 테이블 생성 및 데이터 삽입을 처리하는 클래스"""
 
-    def __init__(self, db_path: str = "assembly_data.db"):
+    def __init__(self, db_path: str = "politician_score.db"):
         self.db_path = db_path
         self.conn = None
 
@@ -139,8 +139,8 @@ class PydanticDBGenerator:
         placeholders = ", ".join(["?" for _ in fields_list])
 
         sql = f"""INSERT OR REPLACE INTO {table_name} 
-({', '.join(fields_list)}) 
-VALUES ({placeholders})"""
+        ({', '.join(fields_list)}) 
+        VALUES ({placeholders})"""
 
         return sql, values_list
 
@@ -264,192 +264,192 @@ VALUES ({placeholders})"""
             return []
 
 
-def main():
-    """사용 예시"""
-    # DB 생성기 초기화
-    db_gen = PydanticDBGenerator("assembly_data.db")
+# def main():
+#     """사용 예시"""
+#     # DB 생성기 초기화
+#     db_gen = PydanticDBGenerator("politician_score.db")
 
-    try:
-        # 모든 테이블 생성
-        db_gen.create_all_tables()
+#     try:
+#         # 모든 테이블 생성
+#         db_gen.create_all_tables()
 
-        # 샘플 데이터 생성 및 삽입 (Pydantic 검증 포함)
-        print("\n=== 샘플 데이터 삽입 (Pydantic 검증) ===")
+#         # 샘플 데이터 생성 및 삽입 (Pydantic 검증 포함)
+#         print("\n=== 샘플 데이터 삽입 (Pydantic 검증) ===")
 
-        # 의원 데이터 (검증 포함)
-        member1 = RawMemberData(
-            NAAS_CD="MP001",
-            NAAS_NM="김의원",
-            PLPT_NM="더불어민주당",
-            ELECD_NM="서울 강남구 갑",
-            NAAS_EMAIL_ADDR="kim@assembly.go.kr",  # 이메일 검증
-            NAAS_HP_URL="https://kim.assembly.go.kr",  # URL 검증
-            NTR_DIV=Gender.MALE,
-        )
+#         # 의원 데이터 (검증 포함)
+#         member1 = RawMemberData(
+#             NAAS_CD="MP001",
+#             NAAS_NM="김의원",
+#             PLPT_NM="더불어민주당",
+#             ELECD_NM="서울 강남구 갑",
+#             NAAS_EMAIL_ADDR="kim@assembly.go.kr",  # 이메일 검증
+#             NAAS_HP_URL="https://kim.assembly.go.kr",  # URL 검증
+#             NTR_DIV=Gender.MALE,
+#         )
 
-        # 위원회 데이터
-        committee1 = Committee(
-            COMMITTEE_ID=1, COMMITTEE_NAME="법제사법위원회", COMMITTEE_TYPE="상임위원회"
-        )
+#         # 위원회 데이터
+#         committee1 = Committee(
+#             COMMITTEE_ID=1, COMMITTEE_NAME="법제사법위원회", COMMITTEE_TYPE="상임위원회"
+#         )
 
-        # 의안 데이터 (Enum 사용)
-        bill1 = Bill(
-            BILL_ID="BILL001",
-            BILL_NO="2210001",
-            BILL_NAME="테스트 법률안",
-            COMMITTEE_ID=1,
-            STATUS=BillStatus.IN_PROGRESS,  # Enum 값
-        )
+#         # 의안 데이터 (Enum 사용)
+#         bill1 = Bill(
+#             BILL_ID="BILL001",
+#             BILL_NO="2210001",
+#             BILL_NAME="테스트 법률안",
+#             COMMITTEE_ID=1,
+#             STATUS=BillStatus.IN_PROGRESS,  # Enum 값
+#         )
 
-        # 의안 상세 데이터
-        bill_detail1 = BillDetail(
-            BILL_ID="BILL001",
-            RST_PROPOSER="김의원",
-            PROC_RESULT="심사중",
-            DETAIL_LINK="https://likms.assembly.go.kr/bill/detail",
-        )
+#         # 의안 상세 데이터
+#         bill_detail1 = BillDetail(
+#             BILL_ID="BILL001",
+#             RST_PROPOSER="김의원",
+#             PROC_RESULT="심사중",
+#             DETAIL_LINK="https://likms.assembly.go.kr/bill/detail",
+#         )
 
-        # 발의자 관계 데이터
-        proposer1 = BillProposer(BILL_ID="BILL001", POLITICIAN_ID="MP001", RST=True)
+#         # 발의자 관계 데이터
+#         proposer1 = BillProposer(BILL_ID="BILL001", POLITICIAN_ID="MP001", RST=True)
 
-        # 위원회 구성원 데이터
-        committee_member1 = CommitteeMember(
-            COMMITTEE_ID=1,
-            MEMBER_ID="MP001",
-            MEMBER_NAME="김의원",
-            MEMBER_TYPE="위원장",
-        )
+#         # 위원회 구성원 데이터
+#         committee_member1 = CommitteeMember(
+#             COMMITTEE_ID=1,
+#             MEMBER_ID="MP001",
+#             MEMBER_NAME="김의원",
+#             MEMBER_TYPE="위원장",
+#         )
 
-        # 데이터 삽입 (자동 검증)
-        sample_data = [
-            member1,
-            committee1,
-            bill1,
-            bill_detail1,
-            proposer1,
-            committee_member1,
-        ]
+#         # 데이터 삽입 (자동 검증)
+#         sample_data = [
+#             member1,
+#             committee1,
+#             bill1,
+#             bill_detail1,
+#             proposer1,
+#             committee_member1,
+#         ]
 
-        for data in sample_data:
-            success = db_gen.insert_data(data)
-            print(f"Insert {type(data).__name__}: {'Success' if success else 'Failed'}")
+#         for data in sample_data:
+#             success = db_gen.insert_data(data)
+#             print(f"Insert {type(data).__name__}: {'Success' if success else 'Failed'}")
 
-        # JSON 데이터 삽입 예시
-        print("\n=== JSON 데이터 삽입 ===")
-        json_member_data = {
-            "NAAS_CD": "MP002",
-            "NAAS_NM": "이의원",
-            "PLPT_NM": "국민의힘",
-            "NAAS_EMAIL_ADDR": "lee@assembly.go.kr",
-            "NTR_DIV": "여",
-        }
+#         # JSON 데이터 삽입 예시
+#         print("\n=== JSON 데이터 삽입 ===")
+#         json_member_data = {
+#             "NAAS_CD": "MP002",
+#             "NAAS_NM": "이의원",
+#             "PLPT_NM": "국민의힘",
+#             "NAAS_EMAIL_ADDR": "lee@assembly.go.kr",
+#             "NTR_DIV": "여",
+#         }
 
-        success = db_gen.insert_from_json(json_member_data, RawMemberData)
-        print(f"JSON Insert: {'Success' if success else 'Failed'}")
+#         success = db_gen.insert_from_json(json_member_data, RawMemberData)
+#         print(f"JSON Insert: {'Success' if success else 'Failed'}")
 
-        # Pydantic 모델로 조회
-        print("\n=== Pydantic 모델로 데이터 조회 ===")
-        members = db_gen.query_to_pydantic(RawMemberData, limit=5)
-        for member in members:
-            print(f"의원: {member.NAAS_NM} ({member.PLPT_NM}) - {member.NTR_DIV}")
-            # Pydantic 모델이므로 검증된 데이터
-            print(f"  이메일 검증됨: {member.NAAS_EMAIL_ADDR}")
+#         # Pydantic 모델로 조회
+#         print("\n=== Pydantic 모델로 데이터 조회 ===")
+#         members = db_gen.query_to_pydantic(RawMemberData, limit=5)
+#         for member in members:
+#             print(f"의원: {member.NAAS_NM} ({member.PLPT_NM}) - {member.NTR_DIV}")
+#             # Pydantic 모델이므로 검증된 데이터
+#             print(f"  이메일 검증됨: {member.NAAS_EMAIL_ADDR}")
 
-        # 일반 딕셔너리로 조회
-        bills = db_gen.query_data("Bill", "STATUS = '진행중'")
-        for bill in bills:
-            print(f"의안: {bill['BILL_NAME']} - {bill['STATUS']}")
+#         # 일반 딕셔너리로 조회
+#         bills = db_gen.query_data("Bill", "STATUS = '진행중'")
+#         for bill in bills:
+#             print(f"의안: {bill['BILL_NAME']} - {bill['STATUS']}")
 
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        db_gen.close()
-
-
-def validation_example():
-    """Pydantic 검증 기능 예시"""
-    print("\n=== Pydantic 검증 예시 ===")
-
-    try:
-        # 올바른 데이터
-        valid_member = RawMemberData(
-            NAAS_CD="MP003",
-            NAAS_NM="박의원",
-            NAAS_EMAIL_ADDR="park@assembly.go.kr",
-            NAAS_HP_URL="https://park.assembly.go.kr",
-        )
-        print(f"유효한 데이터: {valid_member.NAAS_NM}")
-
-    except Exception as e:
-        print(f"검증 실패: {e}")
-
-    try:
-        # 잘못된 이메일
-        invalid_member = RawMemberData(
-            NAAS_CD="MP004", NAAS_NM="최의원", NAAS_EMAIL_ADDR="invalid-email"  # @ 없음
-        )
-
-    except Exception as e:
-        print(f"이메일 검증 실패: {e}")
-
-    try:
-        # 잘못된 URL
-        invalid_member2 = RawMemberData(
-            NAAS_CD="MP005", NAAS_NM="정의원", NAAS_HP_URL="invalid-url"  # http:// 없음
-        )
-
-    except Exception as e:
-        print(f"URL 검증 실패: {e}")
+#     except Exception as e:
+#         print(f"Error: {e}")
+#     finally:
+#         db_gen.close()
 
 
-def json_integration_example():
-    """JSON 통합 예시"""
-    print("\n=== JSON 통합 예시 ===")
+# def validation_example():
+#     """Pydantic 검증 기능 예시"""
+#     print("\n=== Pydantic 검증 예시 ===")
 
-    db_gen = PydanticDBGenerator("assembly_data.db")
+#     try:
+#         # 올바른 데이터
+#         valid_member = RawMemberData(
+#             NAAS_CD="MP003",
+#             NAAS_NM="박의원",
+#             NAAS_EMAIL_ADDR="park@assembly.go.kr",
+#             NAAS_HP_URL="https://park.assembly.go.kr",
+#         )
+#         print(f"유효한 데이터: {valid_member.NAAS_NM}")
 
-    try:
-        # JSON 문자열로부터 데이터 생성
-        json_str = """
-        [
-            {
-                "NAAS_CD": "MP010",
-                "NAAS_NM": "김JSON",
-                "PLPT_NM": "더불어민주당",
-                "NAAS_EMAIL_ADDR": "json@assembly.go.kr",
-                "NTR_DIV": "남"
-            },
-            {
-                "NAAS_CD": "MP011", 
-                "NAAS_NM": "이JSON",
-                "PLPT_NM": "국민의힘",
-                "NAAS_EMAIL_ADDR": "json2@assembly.go.kr",
-                "NTR_DIV": "여"
-            }
-        ]
-        """
+#     except Exception as e:
+#         print(f"검증 실패: {e}")
 
-        db_gen.create_all_tables()
-        success = db_gen.insert_from_json(json_str, RawMemberData)
-        print(f"JSON 대량 삽입: {'Success' if success else 'Failed'}")
+#     try:
+#         # 잘못된 이메일
+#         invalid_member = RawMemberData(
+#             NAAS_CD="MP004", NAAS_NM="최의원", NAAS_EMAIL_ADDR="invalid-email"  # @ 없음
+#         )
 
-        # 결과 확인
-        members = db_gen.query_to_pydantic(RawMemberData, "NAAS_NM LIKE '%JSON%'")
-        for member in members:
-            print(f"JSON 삽입된 의원: {member.NAAS_NM} ({member.NTR_DIV})")
-            # Pydantic 모델의 JSON 출력
-            print(f"  JSON: {member.json()}")
+#     except Exception as e:
+#         print(f"이메일 검증 실패: {e}")
 
-    finally:
-        db_gen.close()
+#     try:
+#         # 잘못된 URL
+#         invalid_member2 = RawMemberData(
+#             NAAS_CD="MP005", NAAS_NM="정의원", NAAS_HP_URL="invalid-url"  # http:// 없음
+#         )
+
+#     except Exception as e:
+#         print(f"URL 검증 실패: {e}")
 
 
-if __name__ == "__main__":
-    # 기본 예시 실행
-    main()
+# def json_integration_example():
+#     """JSON 통합 예시"""
+#     print("\n=== JSON 통합 예시 ===")
 
-    # 검증 예시 (주석 해제하여 실행)
-    validation_example()
+#     db_gen = PydanticDBGenerator("assembly_data.db")
 
-    # JSON 통합 예시 (주석 해제하여 실행)
-    json_integration_example()
+#     try:
+#         # JSON 문자열로부터 데이터 생성
+#         json_str = """
+#         [
+#             {
+#                 "NAAS_CD": "MP010",
+#                 "NAAS_NM": "김JSON",
+#                 "PLPT_NM": "더불어민주당",
+#                 "NAAS_EMAIL_ADDR": "json@assembly.go.kr",
+#                 "NTR_DIV": "남"
+#             },
+#             {
+#                 "NAAS_CD": "MP011",
+#                 "NAAS_NM": "이JSON",
+#                 "PLPT_NM": "국민의힘",
+#                 "NAAS_EMAIL_ADDR": "json2@assembly.go.kr",
+#                 "NTR_DIV": "여"
+#             }
+#         ]
+#         """
+
+#         db_gen.create_all_tables()
+#         success = db_gen.insert_from_json(json_str, RawMemberData)
+#         print(f"JSON 대량 삽입: {'Success' if success else 'Failed'}")
+
+#         # 결과 확인
+#         members = db_gen.query_to_pydantic(RawMemberData, "NAAS_NM LIKE '%JSON%'")
+#         for member in members:
+#             print(f"JSON 삽입된 의원: {member.NAAS_NM} ({member.NTR_DIV})")
+#             # Pydantic 모델의 JSON 출력
+#             print(f"  JSON: {member.json()}")
+
+#     finally:
+#         db_gen.close()
+
+
+# if __name__ == "__main__":
+#     # 기본 예시 실행
+#     main()
+
+#     # 검증 예시 (주석 해제하여 실행)
+#     validation_example()
+
+#     # JSON 통합 예시 (주석 해제하여 실행)
+#     json_integration_example()
