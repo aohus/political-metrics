@@ -12,12 +12,15 @@ from api.response.response import (
     MemberStatisticResponse,
 )
 from api.service.analyzer import BillService, MemberService
-from etl.assembly.update_statatistics import rebuild_all_statistics_atomic
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload
+
+from backend.src.etl.statatistic.update_statatistics import (
+    rebuild_all_statistics_atomic,
+)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -74,8 +77,8 @@ async def root():
 # ============ 의원 관련 API ============
 @app.get("/members", response_model=APIResponse)
 async def get_members(
-    age: Optional[str] = Query(None, description="당선대수 필터"),
     limit: int = Query(20, ge=1, le=1000, description="조회할 개수"),
+    age: Optional[str] = Query(None, description="당선대수 필터"),
     party: Optional[str] = Query(None, description="정당명 필터"),
     db_session: AsyncSession = Depends(get_db_manager),
 ):
@@ -133,13 +136,17 @@ async def get_member(member_id: str, db_session: AsyncSession = Depends(get_db_m
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/ranking/members/{criteria}")
+@app.get("/ranking/members", response_model=APIResponse)
 async def get_top_members(
-    criteria: str, limit: int = 10, db_session: AsyncSession = Depends(get_db_manager)
+    limit: int = Query(20, ge=1, le=1000, description="조회할 개수"),
+    criteria: Optional[str] = Query(None, description="정렬 기준(total, lead, co bill count)"),
+    committee: Optional[str] = Query(None, description="위원회명 필터"),
+    party: Optional[str] = Query(None, description="정당명 필터"),
+    db_session: AsyncSession = Depends(get_db_manager),
 ):
     try:
         service = MemberService(MemberAdapter, db_session)
-        top_members = service.get_top_members_by_criteria(criteria, limit) 
+        top_members = service.get_top_members_by_criteria(criteria, committee, party, limit) 
         if not top_members:
             raise HTTPException(status_code=404)
 
@@ -160,17 +167,27 @@ async def get_top_members(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching member: {e}", exc_info=True)
+        logger.error(f"Error fetching top member list: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/ranking/bills/{criteria}")
+
+@app.get("/ranking/bills", response_model=APIResponse)
 async def get_top_bills(
-    criteria: str, limit: int = 10, db: AsyncSession = Depends(get_db_manager)
+    limit: int = Query(20, ge=1, le=1000, description="조회할 개수"),
+    criteria: Optional[str] = Query(None, description="정렬 기준(proposed, passed)"),
+    committee: Optional[str] = Query(None, description="위원회명 필터"),
+    party: Optional[str] = Query(None, description="정당명 필터"),
+    db_session: AsyncSession = Depends(get_db_manager),
 ):
     # criiteria: proposed, passd
-    service = BillService(db)
-    top_bills = service.get_top_bills_by_criteria(criteria, limit)
-    return top_bills
+    service = BillService(BillAdapter, db_session)
+    top_bills = service.get_top_bills_by_criteria(criteria, committee, party, limit)
+    return APIResponse(
+        success=True,
+        message="의안 통계 정보를 조회했습니다",
+        data=top_bills,
+        total=len(top_bills)
+    )
 
 
 # ============ 의원 관련 API ============

@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 from schema.utils import BillStatus, Gender
 
 # 로깅 설정
@@ -85,6 +84,7 @@ class Bill(BaseModel):
     COMMITTEE_NAME: Optional[str] = Field(None, description="소관위원회")
     PROPOSE_DT: Optional[datetime] = Field(None, description="제안일")
     PROC_DT: Optional[datetime] = Field(None, description="의결일")
+    ALTER_BILL_NO: Optional[str] = Field(None, description="의안번호", max_length=50)
     STATUS: BillStatus = Field(BillStatus.COMMITTEE_PENDING, description="의안상태")
 
     @field_validator("BILL_NAME")
@@ -130,6 +130,10 @@ class BillDetail(BaseModel):
     PROC_RESULT: Optional[str] = Field(
         None, description="본회의심의결과", max_length=100
     )
+    GVRN_TRSF_DT: Optional[datetime] = Field(None, description="정부 이송일")
+    PROM_LAW_NM: Optional[str] = Field(None, description="공포 법률명", max_length=500)
+    PROM_DT: Optional[datetime] = Field(None, description="공포일")
+    PROM_NO: Optional[str] = Field(None, description="공포번호", max_length=100)
 
     model_config = ConfigDict(
         json_schema_extra={

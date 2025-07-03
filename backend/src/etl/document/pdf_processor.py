@@ -1,10 +1,17 @@
 import asyncio
 import logging
+import os
+import sys
 
-from bill_pdf_parser.bill_parser import BillParser
-from bill_pdf_parser.download_file import download_mass_assembly_pdfs
-from bill_pdf_parser.pdf_reader import create_pdf_reader
-from bill_pdf_parser.save_data import create_saver
+# 현재 파일의 디렉토리를 sys.path에 추가하여 상대 경로 import가 가능하도록 설정
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..', '..'))
+sys.path.append(parent_dir)
+
+from etl.document.bill_parser import BillParser
+from etl.utils.extract.download_file import download_mass_assembly_pdfs
+from etl.utils.processor.pdf_reader import create_pdf_reader
+from etl.utils.saver.write_file import create_saver
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -32,31 +39,33 @@ READER_CONFIG = {
 }
 
 SAVE_CONFIG = {
-    "output_directory": "./bill_pdf_parser/extracted_texts",
+    "output_directory": "../../../data/documents/extracted_texts2",
     "add_timestamp": True,
     "create_subdirectories": True,
     "log_extractions": False,
 }
 
 
+
 class PDFProcessor:
+    # TODO: parser, pdf_reader, saver 분리
     async def download(self, path: str) -> str:
         return await download_mass_assembly_pdfs(path)
 
     async def process(self, path: str) -> str:
-        pdf_dir = await self.download(path)
+        # pdf_dir = await self.download(path)
         config = {"reader_config": READER_CONFIG, "saver_config": SAVE_CONFIG}
 
         parser = BillParser(
             create_pdf_reader(),
-            create_saver(),
+            create_saver("../../../data/documents/extracted_texts2"),
             config=config,
         )
-        return await parser.extract_multiple_files_batched(pdf_dir)
+        return await parser.extract_multiple_files_batched(path)
 
 
 async def main():
-    path = "./bill_pdf_parser/mass_bills_pdf/"
+    path = "../../../data/documents/mass_bills_pdf/"
     processor = PDFProcessor()
     await processor.process(path)
 

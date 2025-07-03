@@ -15,8 +15,18 @@ class MemberService:
     def __init__(self, adapter: MemberAdapter, db_session: AsyncSession):
         self.adapter = adapter(db_session)
 
-    async def get_members(self, limit: int = 20, age: str = None, party: Optional[str] = None) -> list:
-        return await self.adapter.get_members(limit, age, party)
+    async def validate_criteria(self, criteria: str):
+        valid_criteria = ["total_bill_count", "total_pass_rate", "lead_bill_count", "lead_pass_rate", "co_bill_count", "co_pass_rate"]
+        if criteria not in valid_criteria:
+            raise ValueError(f"Invalid criteria: {criteria}. Must be one of {valid_criteria}")
+        
+    async def get_members(self,
+                          limit: int = 20,
+                          age: str = "22",
+                          party: Optional[str] = None,
+                          committee: Optional[str] = None
+                          ) -> list:
+        return await self.adapter.get_members(limit, age, party, committee)
 
     async def get_member(self, member_id: str) -> Optional[dict]:
         tasks = [
@@ -35,8 +45,19 @@ class MemberService:
             "committee_stats": results[2]
         }
 
-    async def get_top_members_by_criteria(self, criteria: str, limit: int = 10) -> list[dict]:
-        top_members = await self.adapter.get_top_members_by_criteria(criteria, limit)
+    async def get_top_members_by_criteria(self,
+                                          criteria: str,
+                                          party: Optional[str] = None,
+                                          committee: Optional[str] = None,
+                                          limit: int = 10,
+                                          ) -> list[dict]:
+        try:
+            await self.validate_criteria(criteria)
+        except ValueError as e:
+            logger.error(f"Invalid criteria provided: {e}")
+            raise
+        
+        top_members = await self.adapter.get_top_members_by_criteria(criteria, party, committee, limit)
         tasks = [self.get_member(member.MEMBER_ID) for member in top_members]
         results = await asyncio.gather(*tasks)
         return results
@@ -46,8 +67,29 @@ class BillService:
     def __init__(self, adapter: BillAdapter, db_session: AsyncSession):
         self.adapter = adapter(db_session)
 
-    async def get_top_bills_by_criteria(self, criteria: str, limit: int = 10):
-        return self.adapter.get_top_bills_by_criteria(criteria, limit)
+    async def validate_criteria(self, criteria: str):
+        valid_criteria = ["proposed", "passed", "proposed_by_committee"]
+        if criteria not in valid_criteria:
+            raise ValueError(f"Invalid criteria: {criteria}. Must be one of {valid_criteria}")
+
+    async def get_bills(self, limit: int = 20, age: str = "22", party: Optional[str] = None) -> list:
+        """
+        의안 목록 조회 (필터링 및 페이지네이션 지원)
+        """
+        return await self.adapter.get_bills(limit, age, party)
+    
+    async def get_top_bills_by_criteria(self,
+                                        limit: int = 10,
+                                        criteria: str = "proposed",
+                                        party: Optional[str] = None,
+                                        committee: Optional[str] = None,
+                                        ) -> list[dict]:
+        try:
+            await self.validate_criteria(criteria)
+        except ValueError as e:
+            logger.error(f"Invalid criteria provided: {e}")
+            raise
+        return await self.adapter.get_top_bills_by_criteria(criteria, party, committee, limit)
 
 
 class CommitteeServie:

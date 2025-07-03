@@ -17,21 +17,16 @@ class MemberAdapter:
 
     async def get_members(self, limit: int = 20, age: Optional[str] = None, party: Optional[str] = None) -> list:
         """
-        의원 목록 조회 (필터링 및 페이지네이션 지원)
+        의원 목록 조회 
         """
-        # select 구문으로 쿼리 구성
         stmt = select(Member)
         
-        # 필터 조건 적용
         if party:
             stmt = stmt.where(Member.PLPT_NM == party)
         if age:
             stmt = stmt.where(Member.GTELT_ERACO.like(f"%{age}%"))
         
-        # 정렬 및 제한
         stmt = stmt.order_by(Member.NAAS_NM.asc()).limit(limit)
-        
-        # 비동기 실행
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
@@ -91,36 +86,32 @@ class MemberAdapter:
             for cs in data
         ]
 
-    async def get_top_members_by_criteria(self, criteria: str, limit: int = 10) -> list[str]:
+    async def get_top_members_by_criteria(self, criteria: str, party: Optional[str] = None, committee: Optional[str] = None, limit: int = 10) -> list[str]:
         """
         특정 기준으로 상위 의원 조회
         """
-        if criteria == "total_bill_count":
-            stmt = (
-                select(MemberBillStatistic.MEMBER_ID)
-                .order_by(MemberBillStatistic.total_count.desc())
-                .limit(limit)
-            )
-        elif criteria == "total_pass_rate":
-            stmt = (
-                select(MemberBillStatistic.MEMBER_ID)
-                .order_by(MemberBillStatistic.total_pass_rate.desc())
-                .limit(limit)
-            )
-        elif criteria == "lead_bill_count":
-            stmt = (
-                select(MemberBillStatistic.MEMBER_ID)
-                .order_by(MemberBillStatistic.lead_count.desc())
-                .limit(limit)
-            )
-        elif criteria == "co_bill_count":
-            stmt = (
-                select(MemberBillStatistic.MEMBER_ID)
-                .order_by(MemberBillStatistic.co_count.desc())
-                .limit(limit)
-            )
-        else:
-            raise ValueError("Invalid criteria for top members")
+        if party:
+            stmt = select(Member).where(Member.PLPT_NM == party)
+        if committee:
+            stmt = select(Member).join(Member.committees).where(Member.committees.CMIT_NM == committee)
+        
+        criteria_mappig = {
+            "total_count": MemberBillStatistic.total_count,
+            "total_pass_rate": MemberBillStatistic.total_pass_rate,
+            "lead_count": MemberBillStatistic.lead_count,
+            "co_count": MemberBillStatistic.co_count,
+        }
+
+        try:
+            criteria_column = criteria_mappig[criteria]
+        except KeyError:
+            raise ValueError(f"Invalid criteria: {criteria}. Must be one of {list(criteria_mappig.keys())}")    
+        
+        stmt = (
+            select(MemberBillStatistic.MEMBER_ID)
+            .order_by(criteria_mappig.get(criteria_column).desc())
+            .limit(limit)
+        )
         
         result = await self.db.execute(stmt)
         return [row[0] for row in result.all()]  # MEMBER_ID만 추출
@@ -130,20 +121,18 @@ class MemberAdapter:
         의원 정보와 통계를 한 번에 조회 (효율적인 방법)
         """
         # 병렬로 여러 쿼리 실행
-        member_task = self.get_member_by_id(member_id)
-        stats_task = self.get_member_bill_statistics(member_id)
-        committee_task = self.get_member_committee_statistics(member_id)
-        
-        # 동시 실행 (asyncio.gather 사용 권장)
+        tasks = [
+            self.get_member_by_id(member_id),
+            self.get_member_bill_statistics(member_id),
+            self.get_member_committee_statistics(member_id)
+        ]
+
         try:
-            member = await member_task
-            bill_stats = await stats_task
-            committee_stats = await committee_task
-            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             return {
-                "member": member,
-                "bill_stats": bill_stats,
-                "committee_stats": committee_stats,
+                "member": results[0],
+                "bill_stats": results[1],
+                "committee_stats": results[2]
             }
         except ValueError as e:
             logger.error(f"Error fetching member data for {member_id}: {e}")
@@ -181,14 +170,14 @@ class BillAdapter:
         self.db = db_session
 
     async def get_top_bills_by_criteria(self,
-                                      criteria: str = "proposed",
-                                      limit: int = 10,
-                                      party: Optional[str] = None,
-                                      committee: Optional[str] = None
-                                      ) -> list[dict]:
+                                        criteria: str = "proposed",
+                                        committee: Optional[str] = None,
+                                        limit: int = 10,
+                                        ) -> list[dict]:
         """
         특정 기준으로 상위 의안 조회
         """
+        
         if criteria == "proposed":
             stmt = (
                 select(
@@ -336,31 +325,6 @@ class AdapterFactory:
     def create_bill_adapter(db_session: AsyncSession) -> BillAdapter:
         return BillAdapter(db_session)
 
-
-# ==========================================
-# FastAPI에서 사용하는 경우
-# ==========================================
-
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-
-async def get_async_db() -> AsyncSession:
-    """비동기 데이터베이스 세션 의존성"""
-    # 실제 구현은 데이터베이스 설정에 따라 다름
-    pass
-
-# FastAPI 엔드포인트에서 사용
-async def get_member_endpoint(
-    member_id: str, 
-    db: AsyncSession = Depends(get_async_db)
-):
-    adapter = MemberAdapter(db)
-    try:
-        member_data = await adapter.get_member_with_statistics(member_id)
-        return member_data
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ==========================================

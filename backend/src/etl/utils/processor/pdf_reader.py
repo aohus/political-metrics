@@ -173,7 +173,7 @@ class PDFPlumberReader(BasePDFReader):
     async def extract(self, pdf_path: str) -> Dict[str, Any]:
         """pdfplumber를 사용한 비동기 텍스트 추출"""
         if not PDFPLUMBER_AVAILABLE:
-            return {"error": "pdfplumber가 설치되지 않았습니다"}
+            raise ImportError({"error": "pdfplumber가 설치되지 않았습니다"})
 
         async with self.semaphore:
             try:
@@ -182,9 +182,8 @@ class PDFPlumberReader(BasePDFReader):
                     self.executor, self._extract_with_pdfplumber, pdf_path
                 )
                 return result
-
             except Exception as e:
-                return {"method": "pdfplumber", "error": str(e)}
+                raise ValueError({"method": "pdfplumber", "error": str(e)})
 
     def _extract_with_pdfplumber(self, pdf_path: str) -> Dict[str, Any]:
         """pdfplumber로 실제 추출 작업 (동기 함수)"""

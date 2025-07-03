@@ -5,6 +5,7 @@ PDF 텍스트 정리 및 법률안 정보 추출 (비동기 버전)
 
 import asyncio
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,11 +41,15 @@ class BillParser:
     """비동기 법률안 문서 정보 추출기"""
 
     def __init__(
-        self, text_extractor=None, data_saver=None, max_concurrent: int = 10, **config
+        self,
+        # config=None,
+        # text_extractor=None,
+        # data_saver=None,
+        max_concurrent: int = 10,
     ):
-        self.text_extractor = text_extractor
-        self.data_saver = data_saver
-        self.config = config
+        # self.config = config
+        # self.text_extractor = text_extractor(self.config.get("reader_config", {}))
+        # self.data_saver = data_saver(self.config.get("saver_config", {}))
         self.max_concurrent = max_concurrent
         self.semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -65,7 +70,8 @@ class BillParser:
                 r"1\.\s*대안의\s*제안경위(.*?)(?=2\.\s*대안의\s*제안이유|$)",
                 re.DOTALL | re.IGNORECASE,
             ),
-            "seven_digit_numbers": re.compile(r"\b([0-9]{7})\b"),
+            "bill_number_only": re.compile(r"\b([1-9][0-9]{3,7})\b"),
+            "bill_number": re.compile(r"제([1-9][0-9]{3,7})호"),
             "comparison_table_patterns": [
                 re.compile(r"신[·•․]\s*구조문대비표", re.IGNORECASE),
                 re.compile(r"신\s*구조문대비표", re.IGNORECASE),
@@ -102,9 +108,7 @@ class BillParser:
     def extract_from_text(self, text: str, title: str) -> LegalDocumentInfo:
         """텍스트에서 법률안 정보 추출 (동기 처리 - 정규식 처리는 빠름)"""
         info = LegalDocumentInfo(full_text=text, title=title)
-        bill_number_match = self.patterns["bill_number"].search(text)
-        if bill_number_match:
-            info.bill_number = bill_number_match.group(1)
+        info.bill_number = title.split("_")[0]
 
         proposal_date_match = self.patterns["proposal_date"].search(text)
         if proposal_date_match:
@@ -142,25 +146,17 @@ class BillParser:
         alternative_numbers = []
 
         # "1. 대안의 제안경위" 섹션 찾기
+        # text = text.replace("\n", " ")
         alternative_section_match = self.patterns["alternative_section"].search(text)
 
         if alternative_section_match:
             section_text = alternative_section_match.group(1)
-            number_matches = self.patterns["seven_digit_numbers"].findall(section_text)
-            alternative_numbers = list(set(number_matches))
-            alternative_numbers.sort()
-        else:
-            # 전체 텍스트에서 7자리 숫자 찾기 (fallback)
-            if self.patterns["is_alternative"].search(text):
-                all_numbers = self.patterns["seven_digit_numbers"].findall(text)
-                filtered_numbers = []
-                for num in all_numbers:
-                    if num.startswith("22") and len(num) == 7:
-                        filtered_numbers.append(num)
-                alternative_numbers = list(set(filtered_numbers))
-                alternative_numbers.sort()
-
-        return alternative_numbers
+            section_text = section_text.replace("\n", " ")
+            alter_nums = self.patterns["bill_number_only"].findall(section_text)
+            alter_nums += self.patterns["bill_number"].findall(section_text)
+            alternative_numbers = list(set(alter_nums))
+            filtered = [n for n in alternative_numbers if not re.search(rf"{n}\.", section_text)]
+        return filtered
 
     def _extract_comparison_table(self, text: str) -> str:
         """신·구조문대비표 추출"""
@@ -207,17 +203,19 @@ class BillParser:
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(str(e))
+                logger.error(str(result))
             else:
                 processed_results.append(result)
         return processed_results
 
     async def extract_multiple_files_batched(
-        self, file_paths: List[Union[str, Path]], batch_size: int = 50
+        self, dir_path: str, batch_size: int = 50
     ) -> List[LegalDocumentInfo]:
         """배치 단위로 여러 파일에서 정보 추출 (대용량 처리용)"""
         save_tasks = []
-
+        file_paths = [os.path.join(dir_path, fname) for fname in os.listdir(dir_path)]
+        logger.info(f"총 {len(file_paths)}개의 파일")
+        
         for i in range(0, len(file_paths), batch_size):
             batch = file_paths[i : i + batch_size]
             batch_results = await self.extract_multiple_files(batch)

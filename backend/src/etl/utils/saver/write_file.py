@@ -25,7 +25,7 @@ class PDFTextFileSaver:
 
     def __init__(
         self,
-        output_dir: str = "bill_pdf_parser/extracted_texts",
+        output_dir: str,
         max_concurrent: int = 10,
     ):
         """
@@ -286,7 +286,7 @@ async def save_multiple_bills_async(
 
 
 def create_saver(
-    output_dir: str = "./bill_pdf_parser/extracted_texts", max_concurrent: int = 10
+    output_dir: str = None, max_concurrent: int = 10
 ) -> PDFTextFileSaver:
     """비동기 PDF 저장기 생성 팩토리 함수"""
     return PDFTextFileSaver(output_dir, max_concurrent)

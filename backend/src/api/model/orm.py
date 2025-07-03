@@ -86,7 +86,14 @@ class Bill(Base):
     BILL_ID = Column(String(100), primary_key=True, index=True, comment="의안ID")
     BILL_NO = Column(String(50), nullable=False, unique=True, comment="의안번호")
     AGE = Column(String(10), nullable=True, comment="대수")
-    BILL_NAME = Column(String(500), nullable=False, comment="법률안명")  # 필수 필드
+    BILL_NAME = Column(String(500), nullable=False, comment="법률안명")
+    ALTER_BILL_NO = Column(
+        String(100),
+        ForeignKey("bills.BILL_ID"),
+        nullable=True,
+        comment="대안 의안ID (self-reference)",
+    )
+
     COMMITTEE_NAME = Column(
         String(200),
         ForeignKey("committees.COMMITTEE_NAME"),
@@ -102,10 +109,11 @@ class Bill(Base):
         comment="의안상태",
     )
 
-    # 관계 정의
     committee = relationship("Committee", back_populates="bills")
     detail = relationship("BillDetail", back_populates="bill", uselist=False)
     proposers = relationship("BillProposer", back_populates="bill")
+    # self-referential relationship
+    alter_bill = relationship("Bill", remote_side=[BILL_ID], backref="altered_bills", foreign_keys=[ALTER_BILL_NO])
 
     def __repr__(self):
         return f"<Bill(BILL_ID='{self.BILL_ID}', BILL_NAME='{self.BILL_NAME}')>"
@@ -130,8 +138,10 @@ class BillDetail(Base):
     CMT_PROC_DT = Column(DateTime, nullable=True, comment="소관위처리일")
     CMT_PROC_RESULT_CD = Column(String(50), nullable=True, comment="소관위처리결과")
     PROC_RESULT = Column(String(100), nullable=True, comment="본회의심의결과")
-
-    # 관계 정의
+    GVRN_TRSF_DT = Column(DateTime, nullable=True, comment="정부 이송일")
+    PROM_LAW_NM = Column(String(500), nullable=True, comment="공포 법률명")
+    PROM_DT = Column(DateTime, nullable=True, comment="공포일")
+    PROM_NO = Column(String(100), nullable=True, comment="공포번호")
     bill = relationship("Bill", back_populates="detail")
 
     def __repr__(self):
