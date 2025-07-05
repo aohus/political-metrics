@@ -1,3 +1,15 @@
+import json
+import logging
+from datetime import datetime
+from typing import Optional
+
+from core.exceptions.exceptions import (
+    BillServiceError,
+    DataProcessingError,
+    DataValidationError,
+)
+
+
 class DateConverter:
     """날짜 변환 유틸리티"""
 
@@ -22,10 +34,10 @@ class MemberIdResolver:
     """의원 ID 해결 클래스"""
 
     def __init__(self, member_id_file_path: str):
-        self.member_dict = self._load_member_dict(member_id_file_path)
         self.logger = logging.getLogger(__name__)
+        self.member_dict = self._load_member_dict(member_id_file_path)
 
-    def _load_member_dict(self, file_path: str) -> Dict:
+    def _load_member_dict(self, file_path: str) -> dict:
         """의원 ID 매핑 딕셔너리 로드"""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -38,9 +50,9 @@ class MemberIdResolver:
 
     def get_member_id(self, member_name: str, age: str) -> Optional[str]:
         """의원명과 대수로 의원 ID 조회"""
-        return self.member_dict.get((member_name, age))
+        return self.member_dict.get(str((member_name, age)))
 
-    def resolve_member_ids(self, member_names: List[str], age: str) -> List[str]:
+    def resolve_member_ids(self, member_names: list[str], age: str) -> list[str]:
         """의원명 목록을 의원 ID 목록으로 변환"""
         resolved_ids = []
         for name in member_names:

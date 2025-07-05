@@ -6,17 +6,17 @@ from typing import Dict, List, Tuple
 
 import aiofiles
 import pandas as pd
+from api.model.orm import Bill, BillDetail, BillProposer
+from core.exceptions.exceptions import BillServiceError, DataProcessingError
+from core.schema.utils import BillStatus, ProposerType
 from sqlalchemy.exc import SQLAlchemyError
 
-from ...api.model.orm import Bill, BillDetail, BillProposer
-from ...core.exceptions.exceptions import BillServiceError, DataProcessingError
-from ...core.schema.utils import BillStatus, ProposerType
-from ..utils import DateConverter, MemberIdResolver
+from ..utils.utils import DateConverter, MemberIdResolver
 
 logger = logging.getLogger(__name__)
 
-
-with open("./data/assemply/ref/alter_bill_link.json", "r") as f:
+base_dir = "/Users/aohus/Workspaces/github/politics/backend/src/etl/data/assembly"
+with open(f"{base_dir}/ref/alter_bill_link.json", "r") as f:
     alter_bill_link = json.load(f)
 
 
@@ -34,7 +34,7 @@ class BillProcessor:
 
     async def process(self, path_list: list):
         tasks = [self.transform(api_name, path) for api_name, path in path_list]
-        results = await asyncio.gather(*tasks, return_exception=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         merged_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
@@ -42,7 +42,8 @@ class BillProcessor:
                 raise result
             else:
                 merged_results.extend(result)
-        return await self.convert_to_table_format(merged_results)
+        merged_results = await self.convert_to_table_format(merged_results)
+        return merged_results
 
     async def transform(self, api_name: str, path: str) -> None:
         data = await read_data(path)
@@ -52,11 +53,12 @@ class BillProcessor:
         }
         if handler := handlers.get(api_name):
             try:
-                logger.info(f"Successfully transformed {api_name} data from {data}")
-                return await handler(data)
+                result = await handler(data)
+                logger.info(f"Successfully transformed {api_name} data from {path}")
+                return result
             except Exception as e:
                 logger.error(f"Failed to transform {api_name}: {e}")
-                raise
+                raise e
         else:
             raise ValueError(f"Unsupported API type: {api_name}")
 
@@ -84,26 +86,35 @@ class BillProcessor:
         return df.to_dict(orient="records")
 
     async def convert_to_table_format(self, bills: list):
-        bill_dict, bill_detail_dict = {}, {}
-        for bill in bills:
-            bill["COMMITTEE_NAME"] = bill.get("COMMITTEE")
-            bill["STATUS"] = self._determine_bill_status(bill)
-            if bill["STATUS"] in [BillStatus.AMENDED_DISCARDED, BillStatus.ALTERNATIVE_DISCARDED]:
-                bill["ALTER_BILL_NO"] = self._link_alter_bill_no(bill["BILL_NO"])
+        bill_list, bill_detail_list = [], []
+        try: 
+            for bill in bills:
+                bill["COMMITTEE_NAME"] = bill.get("COMMITTEE")
+                bill["STATUS"] = self._determine_bill_status(bill)
+                if bill["STATUS"] in [BillStatus.AMENDED_DISCARDED, BillStatus.ALTERNATIVE_DISCARDED]:
+                    alter_no = self._link_alter_bill_no(bill["BILL_NO"])
+                    bill["ALTER_BILL_NO"] = alter_no
+                bill_list.append({field: bill.get(field, None) for field in Bill.__table__.columns.keys()})
+                bill_detail_list.append({field: bill.get(field, None) for field in BillDetail.__table__.columns.keys()})
+        except Exception as e:
+            logger.error(e, exc_info=True)
+        return ("bills", bill_list), ("bill_details", bill_detail_list)
 
-            bill_dict.append({field: bill.get(field, None) for field in Bill.__table__.columns.keys()})
-            bill_detail_dict.append({field: bill.get(field, None) for field in BillDetail.__table__.columns.keys()})
-        return [("bills", bill_dict), ("bill_details", bill_detail_dict)]
+    def _link_alter_bill_no(self, bill_no: str) -> list:
+        try:
+            if len(bill_no) <= 5:
+                bill_no = "22" + bill_no.zfill(5)
+            return alter_bill_link[bill_no]
+        except:
+            # logger.error(f"Fail to find alternative bill number: {bill_no}")
+            return None
 
-    async def _link_alter_bill_no(self, bill_data: dict) -> list:
-        return alter_bill_link[bill_data["BILL_NO"]]
-
-    async def _determine_bill_status(self, bill_data: Dict) -> str:
+    def _determine_bill_status(self, bill_data: Dict) -> str:
         """의안 상태 결정"""
         try:
             # 위원회가 지정되지 않은 경우
             if not bill_data.get("COMMITTEE"):
-                return BillStatus.WAITING_COMMITTEE
+                return BillStatus.WAITING
             # 이미 처리 결과가 있는 경우
             if bill_data.get("PROC_RESULT"):
                 return bill_data["PROC_RESULT"]
@@ -160,21 +171,23 @@ class BillProcessor:
 class BillProposerProcessor:
     """의안 발의자 처리기"""
 
-    def __init__(self, member_resolver: MemberIdResolver, default_age: str = "22"):
-        self.member_resolver = member_resolver
+    def __init__(self, default_age: str = "22"):
+        self.member_resolver = MemberIdResolver(f"{base_dir}/ref/member_id.json")
         self.default_age = default_age
 
-    async def process_bill_proposers(self, bill_data: Dict) -> List[BillProposer]:
+
+    async def process_bill_proposers(self, bills: list[dict]) -> list[dict]:
         """의안 발의자 관계 데이터 생성"""
         proposers = []
-        bill_id = bill_data["BILL_ID"]
-        proposers.extend(await self._process_lead_proposers(bill_id, bill_data))
-        proposers.extend(await self._process_co_proposers(bill_id, bill_data))
+        for bill_data in bills:
+            bill_id = bill_data["BILL_ID"]
+            proposers.extend(await self._process_lead_proposers(bill_id, bill_data))
+            proposers.extend(await self._process_co_proposers(bill_id, bill_data))
         return proposers
 
     async def _process_lead_proposers(
         self, bill_id: str, bill_data: Dict
-    ) -> List[BillProposer]:
+    ) -> list[dict]:
         proposers = []
         rst_proposers = bill_data.get("RST_PROPOSER")
 
@@ -182,21 +195,18 @@ class BillProposerProcessor:
             return proposers
 
         if isinstance(rst_proposers, str):
-            rst_proposers = [rst_proposers]
+            rst_proposers = [name.strip() for name in rst_proposers.split(",")]
 
         member_ids = self.member_resolver.resolve_member_ids(
             rst_proposers, self.default_age
         )
-
         for member_id in member_ids:
-            proposers.append(
-                BillProposer(BILL_ID=bill_id, MEMBER_ID=member_id, RST=True)
-            )
+            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST":True})
         return proposers
 
     async def _process_co_proposers(
-        self, bill_id: str, bill_data: Dict
-    ) -> List[BillProposer]:
+        self, bill_id: str, bill_data: dict
+    ) -> list[dict]:
         """공동발의자 처리"""
         proposers = []
         co_proposers_str = bill_data.get("PUBL_PROPOSER")
@@ -210,52 +220,5 @@ class BillProposerProcessor:
         )
 
         for member_id in member_ids:
-            proposers.append(
-                BillProposer(BILL_ID=bill_id, MEMBER_ID=member_id, RST=False)
-            )
-
+            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST":False})
         return proposers
-
-
-    # def _extract_bill_fields(self, bill_data: Dict) -> Dict:
-    #     """Bill 모델에 필요한 필드만 추출"""
-    #     bill_fields = [
-    #         "BILL_ID",
-    #         "BILL_NO",
-    #         "AGE",
-    #         "BILL_NAME",
-    #         "COMMITTEE_NAME",
-    #         "PROPOSE_DT",
-    #         "PROC_DT",
-    #         "STATUS",
-    #         "ALTER_BILL_NO",
-    #     ]
-
-    #     return {
-    #         field: bill_data.get(field) for field in bill_fields if field in bill_data
-    #     }
-
-    # def _extract_bill_detail_fields(self, bill_data: Dict) -> Dict:
-    #     """BillDetail 모델에 필요한 필드만 추출"""
-    #     detail_fields = [
-    #         "BILL_ID",
-    #         "PROC_DT",
-    #         "DETAIL_LINK",
-    #         "LAW_SUBMIT_DT",
-    #         "LAW_PRESENT_DT",
-    #         "LAW_PROC_DT",
-    #         "LAW_PROC_RESULT_CD",
-    #         "COMMITTEE_DT",
-    #         "CMT_PRESENT_DT",
-    #         "CMT_PROC_DT",
-    #         "CMT_PROC_RESULT_CD",
-    #         "PROC_RESULT",
-    #         "GVRN_TRSF_DT",
-    #         "PROM_LAW_NM",
-    #         "PROM_DT",
-    #         "PROM_NO",
-    #     ]
-
-    #     return {
-    #         field: bill_data.get(field) for field in detail_fields if field in bill_data
-    #     }

@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 
-from utils.extract.api_schema import APISchema, BaseAPI
+from ..utils.extract.api_schema import APISchema, BaseAPI
 
 
 def assembly_total_counter(result: Dict, key: str) -> int:
@@ -28,7 +28,7 @@ class AssemblyAPI(BaseAPI):
         "law_bill_member": APISchema(
             endpoint="nzmimeepazxkubdpn",
             key="nzmimeepazxkubdpn",
-            req_parmas={
+            req_params={
                 "Type": "json",
                 "pIndex": 1,
                 "pSize": 100,
@@ -52,7 +52,7 @@ class AssemblyAPI(BaseAPI):
         "law_bill_cap": APISchema(
             endpoint="TVBPMBILL11",
             key="TVBPMBILL11",
-            req_parmas={
+            req_params={
                 "Type": "json",
                 "pIndex": 1,
                 "pSize": 100,
@@ -79,7 +79,7 @@ class AssemblyAPI(BaseAPI):
         "law_bill_gov": APISchema(
             endpoint="TVBPMBILL11",
             key="TVBPMBILL11",
-            req_parmas={
+            req_params={
                 "Type": "json",
                 "pIndex": 1,
                 "pSize": 100,
@@ -105,7 +105,7 @@ class AssemblyAPI(BaseAPI):
         "all_bill": APISchema(
             endpoint="ALLBILL",
             key="ALLBILL",
-            req_parmas={
+            req_params={
                 "Type": "json",
                 "pIndex": 1,
                 "pSize": 100,
@@ -120,7 +120,7 @@ class AssemblyAPI(BaseAPI):
         "all_member": APISchema(
             endpoint="ALLMEMBER",
             key="ALLMEMBER",
-            req_parmas={
+            req_params={
                 "Type": "json",
                 "pIndex": 1,
                 "pSize": 100,

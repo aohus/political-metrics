@@ -215,7 +215,7 @@ class BillParser:
         save_tasks = []
         file_paths = [os.path.join(dir_path, fname) for fname in os.listdir(dir_path)]
         logger.info(f"총 {len(file_paths)}개의 파일")
-        
+
         for i in range(0, len(file_paths), batch_size):
             batch = file_paths[i : i + batch_size]
             batch_results = await self.extract_multiple_files(batch)
@@ -243,7 +243,7 @@ class BillParser:
             print(
                 f"✅ 변환된 의안: ({total_bills}, {success_bills}), 태스크 완료 ({completed_count}/{len(save_tasks)})"
             )
-
+    
     async def extract_by_text_extractor(self, file_path: str):
         """비동기 텍스트 추출기를 통한 정보 추출"""
         async with self.semaphore:
