@@ -18,7 +18,7 @@ from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, joinedload
 
-from backend.src.etl.statatistic.update_statatistics import (
+from etl.statatistic.update_statistics import (
     rebuild_all_statistics_atomic,
 )
 

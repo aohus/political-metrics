@@ -15,10 +15,6 @@ from ..utils.utils import DateConverter, MemberIdResolver
 
 logger = logging.getLogger(__name__)
 
-base_dir = "/Users/aohus/Workspaces/github/politics/backend/src/etl/data/assembly"
-with open(f"{base_dir}/ref/alter_bill_link.json", "r") as f:
-    alter_bill_link = json.load(f)
-
 
 async def read_data(path: str) -> dict:
     async with aiofiles.open(path, "r") as f:
@@ -28,8 +24,9 @@ async def read_data(path: str) -> dict:
 
 
 class BillProcessor:
-    def __init__(self, output_dir: str):
+    def __init__(self, alter_bill_link: dict, output_dir: str):
         self.date_converter = DateConverter()
+        self.alter_bill_link = alter_bill_link
         self.output_dir = output_dir
 
     async def process(self, path_list: list):
@@ -104,7 +101,7 @@ class BillProcessor:
         try:
             if len(bill_no) <= 5:
                 bill_no = "22" + bill_no.zfill(5)
-            return alter_bill_link[bill_no]
+            return self.alter_bill_link[bill_no]
         except:
             # logger.error(f"Fail to find alternative bill number: {bill_no}")
             return None

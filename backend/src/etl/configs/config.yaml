@@ -1,0 +1,14 @@
+environment: development
+etl_paths:
+  data_root: data
+  assembly:
+    base: assembly
+    temp: assembly/temp
+    ref: assembly/ref
+    raw: assembly/raw
+    formatted: assembly/formatted
+  document:
+    json: document/formatted
+    pdf: document/pdf
+  law:
+    raw: law/raw

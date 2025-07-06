@@ -7,41 +7,43 @@ from .api_metadata import AssemblyAPI
 from .bill_processor import BillProcessor, BillProposerProcessor
 
 
-async def main():
-    raw_data_dir = "./data/assembly/temp/raw/"
-    formatted_data_dir = "./data/assembly/temp/formatted/"
+async def run(config):
+    assembly_temp_raw = config.assembly_temp_raw
+    assembly_temp_formatted = config.assembly_temp_formatted
 
-    # api_client = AssemblyAPI()
-    # try:
-    #     async with APIExtractor(api_client, raw_data_dir) as extractor:
-    #         # 여러 API 동시 추출
-    #         multiple_requests = {
-    #             "bills": {},
-    #         }
-    #         results = await extractor.extract_multiple(multiple_requests)
-    #         for api_name, data in results.items():
-    #             extractor.save_to_json(api_name, data)
-    # except Exception as e:
-    #     print(f"오류 발생: {e}")
-    # finally:
-    #     print("모든 세션이 정리되었습니다.")
+    api_client = AssemblyAPI()
+    try:
+        async with APIExtractor(api_client, assembly_temp_raw) as extractor:
+            # 여러 API 동시 추출
+            multiple_requests = {
+                "bills": {},
+            }
+            results = await extractor.extract_multiple(multiple_requests)
+            for api_name, data in results.items():
+                extractor.save_to_json(api_name, data)
+    except Exception as e:
+        print(f"오류 발생: {e}")
+    finally:
+        print("모든 세션이 정리되었습니다.")
 
-    # path_list = []
-    # for fname in os.listdir(raw_data_dir):
-    #     path_list.append((fname.split(".")[0], raw_data_dir+fname))
+    path_list = []
+    for fname in os.listdir(assembly_temp_raw):
+        path_list.append((fname.split(".")[0], assembly_temp_raw / fname))
 
-    # with open(raw_data_dir+"bills.json", "r") as f:
-    #     bills = json.load(f)
-
-    base_dir = "/Users/aohus/Workspaces/github/politics/backend/src/etl/data/assembly"
-    path_list = [
-        ("law_bills_member", f"{base_dir}/raw/bills.json"),
-        ("law_bills_gov", f"{base_dir}/raw/law_bill_all.json"),
-    ]
-    with open(f"{base_dir}/raw/bills.json", "r") as f:
+    with open(assembly_temp_raw / "bills.json", "r") as f:
         bills = json.load(f)
 
-    bill_processor = BillProcessor(formatted_data_dir)
+    with open(os.path.join(config.assembly_ref, "alter_bill_link.json"), "r", encoding="utf-8") as f:
+        alter_bill_link = json.load(f)
+
+    path_list = [
+        ("law_bills_member", assembly_temp_raw / "bills.json"),
+        ("law_bills_gov", assembly_temp_raw / "law_bill_all.json"),
+    ]
+    with open(assembly_temp_raw / "bills.json", "r") as f:
+        bills = json.load(f)
+
+    bill_processor = BillProcessor(assembly_temp_formatted)
     bill_proposer_processor = BillProposerProcessor(default_age="22")
 
     tasks = [
@@ -51,24 +53,14 @@ async def main():
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     (bill, bill_detail), bill_processor_result = results
+
     for table_name, data in (bill, bill_detail):
-        with open(
-            "/Users/aohus/Workspaces/github/politics/backend/src/etl/data/assembly/temp/"
-            + table_name
-            + ".json",
-            "w",
-            encoding="utf-8",
-        ) as f:
+        with open(assembly_temp_formatted / f"{table_name}.json", "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
     
-    with open(
-        "/Users/aohus/Workspaces/github/politics/backend/src/etl/data/assembly/temp/"
-        + "proposer_bill.json",
-        "w",
-        encoding="utf-8",
-    ) as f:
+    with open(assembly_temp_formatted / "proposer_bill.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
-    # UpsertDBProcessor.process(formatted_data_dir)
+
+    # UpsertDBProcessor.process(assembly_temp_formatted)
     # CleanDirProcessor.process()
 
-asyncio.run(main())

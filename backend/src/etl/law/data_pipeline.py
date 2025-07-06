@@ -1,14 +1,11 @@
-import asyncio
-
-from assembly_api.api_metadata import AssemblyAPI
-from law_api.api_metadata import LawAPI
-from utils.extract.api import APIExtractor
+from .api_metadata import LawAPI
+from ..utils.extract.api import APIExtractor
 
 # processing
 # save
 
 
-async def main():
+async def run():
     api_client = LawAPI()
     try:
         async with APIExtractor(api_client, "./law_api/data") as law_extractor:
@@ -28,5 +25,3 @@ async def main():
         print("모든 세션이 정리되었습니다.")
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
