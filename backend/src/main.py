@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union
 
-from api.adapters.adapters import BillAdapter, MemberAdapter
+from api.repository.repository import BillRepository, MemberRepository
 from api.db.db_manager import get_db_manager, shutdown_database, startup_database
 from api.response.response import (
     APIResponse,
@@ -80,34 +80,30 @@ async def get_members(
     limit: int = Query(20, ge=1, le=1000, description="조회할 개수"),
     age: Optional[str] = Query(None, description="당선대수 필터"),
     party: Optional[str] = Query(None, description="정당명 필터"),
+    committee: Optional[str] = Query(None, description="소속 위원회 필터"),
     db_session: AsyncSession = Depends(get_db_manager),
 ):
     """
     의원 목록 조회: 기본 정보 반환
     """
-    try:
-        service = MemberService(MemberAdapter, db_session)
-        members = await service.get_members(age=age, party=party, limit=limit)
-        if not members:
-            raise HTTPException(status_code=404, detail="의원을 찾을 수 없습니다")
+    repo = MemberRepository(db_session)
+    service = MemberService(repo)
+    members = await service.get_members(limit=limit, age=age, party=party, committee=committee)
+    if not members:
+        raise HTTPException(status_code=404, detail="의원을 찾을 수 없습니다")
 
-        # 의원 정보를 응답 형식에 맞게 변환
-        members_response: list[MemberResponse] = [
-            MemberResponse.model_validate(member)
-            for member in members
-        ]
+    # 의원 정보를 응답 형식에 맞게 변환
+    members_response: list[MemberResponse] = [
+        MemberResponse.model_validate(member)
+        for member in members
+    ]
 
-        return APIResponse(
-            success=True,
-            message=f"{len(members_response)}명의 의원 정보를 조회했습니다",
-            data=members_response,
-            total=len(members_response),
-        )
-    except Exception as e:
-        logger.error(
-            f"Error fetching members: {e}", exc_info=True
-        )
-        raise HTTPException(status_code=500, detail=str(e))
+    return APIResponse(
+        success=True,
+        message=f"{len(members_response)}명의 의원 정보를 조회했습니다",
+        data=members_response,
+        total=len(members_response),
+    )
 
 
 @app.get("/members/{member_id}", response_model=APIResponse)
@@ -115,25 +111,19 @@ async def get_member(member_id: str, db_session: AsyncSession = Depends(get_db_m
     """
     의원 정보 조회: 의안 관련 통계 포함
     """
-    try:
-        service = MemberService(MemberAdapter, db_session)
-        member_detail = await service.get_member(member_id)
-        if not member_detail:
-            raise HTTPException(status_code=404, detail="의원을 찾을 수 없습니다")
+    repo = MemberRepository(db_session)
+    service = MemberService(repo)
+    member_detail = await service.get_member(member_id)
+    if not member_detail:
+        raise HTTPException(status_code=404, detail="의원을 찾을 수 없습니다")
 
-        # 의원 정보와 통계 정보를 결합
-        stats_response = MemberStatisticResponse(
-            member_info=member_detail.get("member"),
-            bill_stats=member_detail.get("bill_stats"),
-            committee_stats=member_detail.get("committee_stats"),
-        )
-        return APIResponse(success=True, message="의원 정보를 조회했습니다", data=stats_response)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching member: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    # 의원 정보와 통계 정보를 결합
+    stats_response = MemberStatisticResponse(
+        member_info=member_detail.get("member"),
+        bill_stats=member_detail.get("bill_stats"),
+        committee_stats=member_detail.get("committee_stats"),
+    )
+    return APIResponse(success=True, message="의원 정보를 조회했습니다", data=stats_response)
 
 
 @app.get("/ranking/members", response_model=APIResponse)
@@ -144,31 +134,25 @@ async def get_top_members(
     party: Optional[str] = Query(None, description="정당명 필터"),
     db_session: AsyncSession = Depends(get_db_manager),
 ):
-    try:
-        service = MemberService(MemberAdapter, db_session)
-        top_members = service.get_top_members_by_criteria(criteria, committee, party, limit) 
-        if not top_members:
-            raise HTTPException(status_code=404)
+    repo = MemberRepository(db_session)
+    service = MemberService(repo)
+    top_members = await service.get_top_members_by_criteria(criteria, committee, party, limit) 
+    
+    if not top_members:
+        raise HTTPException(status_code=404)
+    # 의원 정보와 통계 정보를 결합
+    top_members_response = [MemberStatisticResponse(
+        member_info=member_detail.get("member"),
+        bill_stats=member_detail.get("bill_stats"),
+        committee_stats=member_detail.get("committee_stats"),
+    ) for member_detail in top_members]
 
-        # 의원 정보와 통계 정보를 결합
-        top_members_response = [MemberStatisticResponse(
-            member_info=member_detail.get("member_info"),
-            bill_stats=member_detail.get("bill_stats"),
-            committee_stats=member_detail.get("committee_stats"),
-        ) for member_detail in top_members]
-
-        return APIResponse(
-            success=True,
-            message="의원 정보를 조회했습니다",
-            data=top_members_response,
-            total=len(top_members_response)
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching top member list: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return APIResponse(
+        success=True,
+        message="의원 정보를 조회했습니다",
+        data=top_members_response,
+        total=len(top_members_response)
+    )
 
 
 @app.get("/ranking/bills", response_model=APIResponse)
@@ -180,7 +164,7 @@ async def get_top_bills(
     db_session: AsyncSession = Depends(get_db_manager),
 ):
     # criiteria: proposed, passd
-    service = BillService(BillAdapter, db_session)
+    service = BillService(BillRepository, db_session)
     top_bills = service.get_top_bills_by_criteria(criteria, committee, party, limit)
     return APIResponse(
         success=True,
