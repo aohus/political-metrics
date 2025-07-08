@@ -93,10 +93,11 @@ async def get_members(
         raise HTTPException(status_code=404, detail="의원을 찾을 수 없습니다")
 
     # 의원 정보를 응답 형식에 맞게 변환
-    members_response: list[MemberResponse] = [
-        MemberResponse.model_validate(member)
-        for member in members
-    ]
+    members_response = [MemberStatisticResponse(
+        member_info=member_detail.get("member"),
+        bill_stats=member_detail.get("bill_stats"),
+        committee_stats=member_detail.get("committee_stats"),
+    ) for member_detail in members]
 
     return APIResponse(
         success=True,

@@ -20,7 +20,7 @@ class MemberRepository:
         """
         의원 목록 조회 
         """
-        stmt = select(Member)
+        stmt = select(Member.MEMBER_ID)
 
         if party:
             stmt = stmt.where(Member.PLPT_NM == party)
@@ -32,15 +32,16 @@ class MemberRepository:
         stmt = stmt.order_by(Member.NAAS_NM.asc()).limit(limit)
 
         try:
-            result = await self.db.execute(stmt)
+            members = await self.db.execute(stmt)
         except ValueError:
             logger.warning("Members not found")
             return None
         except Exception as e:
             logger.error("Unexpected error fetching members", e)
             return None
-
-        return result.scalars().all()
+        
+        result = await self._get_members_info_batch_optimized([member.MEMBER_ID for member in members])
+        return result
 
     async def get_member_by_id(self, member_id: str) -> Member:
         """
