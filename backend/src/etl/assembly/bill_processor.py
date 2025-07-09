@@ -45,8 +45,9 @@ class BillProcessor:
     async def transform(self, api_name: str, path: str) -> None:
         data = await read_data(path)
         handlers = {
-            "law_bills_member": self._transform_member_bills,
-            "law_bills_gov": self._transform_government_bills,
+            "law_bill_member": self._transform_member_bills,
+            "law_bill_gov": self._transform_government_bills,
+            "law_bill_cap": self._transform_government_bills,
         }
         if handler := handlers.get(api_name):
             try:
@@ -74,6 +75,7 @@ class BillProcessor:
         }
         df = pd.DataFrame(data)
         df = df.rename(columns=convert_mapping)
+        df = df[(df["PROPOSER_KIND"] != "의원")]
         df["PROPOSER_KIND"] = df["PROPOSER_KIND"].apply(
             lambda x: ProposerType.GOVERNMENT if x == "정부" else ProposerType.COMMITTEE
         )
@@ -84,7 +86,7 @@ class BillProcessor:
 
     async def convert_to_table_format(self, bills: list):
         bill_list, bill_detail_list = [], []
-        try: 
+        try:
             for bill in bills:
                 bill["COMMITTEE_NAME"] = bill.get("COMMITTEE")
                 bill["STATUS"] = self._determine_bill_status(bill)
@@ -127,11 +129,7 @@ class BillProcessor:
             ]
 
             # None이 아닌 필드들만 필터링
-            process_stages = {
-                field: bill_data[field]
-                for field in status_fields
-                if bill_data.get(field) is not None
-            }
+            process_stages = {field: bill_data[field] for field in status_fields if bill_data.get(field) is not None}
 
             stage_count = len(process_stages)
             today = self.date_converter.now_isoformat()
@@ -168,10 +166,9 @@ class BillProcessor:
 class BillProposerProcessor:
     """의안 발의자 처리기"""
 
-    def __init__(self, default_age: str = "22"):
-        self.member_resolver = MemberIdResolver(f"{base_dir}/ref/member_id.json")
+    def __init__(self, assembly_ref: str, default_age: str = "22"):
+        self.member_resolver = MemberIdResolver(f"{assembly_ref}/member_id.json")
         self.default_age = default_age
-
 
     async def process_bill_proposers(self, bills: list[dict]) -> list[dict]:
         """의안 발의자 관계 데이터 생성"""
@@ -182,9 +179,7 @@ class BillProposerProcessor:
             proposers.extend(await self._process_co_proposers(bill_id, bill_data))
         return proposers
 
-    async def _process_lead_proposers(
-        self, bill_id: str, bill_data: Dict
-    ) -> list[dict]:
+    async def _process_lead_proposers(self, bill_id: str, bill_data: Dict) -> list[dict]:
         proposers = []
         rst_proposers = bill_data.get("RST_PROPOSER")
 
@@ -194,16 +189,12 @@ class BillProposerProcessor:
         if isinstance(rst_proposers, str):
             rst_proposers = [name.strip() for name in rst_proposers.split(",")]
 
-        member_ids = self.member_resolver.resolve_member_ids(
-            rst_proposers, self.default_age
-        )
+        member_ids = self.member_resolver.resolve_member_ids(rst_proposers, self.default_age)
         for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST":True})
+            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": True})
         return proposers
 
-    async def _process_co_proposers(
-        self, bill_id: str, bill_data: dict
-    ) -> list[dict]:
+    async def _process_co_proposers(self, bill_id: str, bill_data: dict) -> list[dict]:
         """공동발의자 처리"""
         proposers = []
         co_proposers_str = bill_data.get("PUBL_PROPOSER")
@@ -212,10 +203,31 @@ class BillProposerProcessor:
             return proposers
 
         co_proposer_names = [name.strip() for name in co_proposers_str.split(",")]
-        member_ids = self.member_resolver.resolve_member_ids(
-            co_proposer_names, self.default_age
-        )
+        member_ids = self.member_resolver.resolve_member_ids(co_proposer_names, self.default_age)
 
         for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST":False})
+            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": False})
         return proposers
+
+
+import os
+
+
+async def process(config, data_paths, output_dir: str):
+    assembly_ref = config.assembly_ref
+    alter_bill_link = await read_data(os.path.join(assembly_ref, "alter_bill_link.json"))
+
+    bill_processor = BillProcessor(alter_bill_link, output_dir)  # TODO: remove alter_bill_link
+    bill_proposer_processor = BillProposerProcessor(assembly_ref, default_age="22")
+    bills, bill_details = await bill_processor.process(data_paths)
+
+    for table_name, data in (bills, bill_details):
+        with open(output_dir / f"{table_name}.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    with open(config.assembly_temp_raw / "law_bill_member.json", "r") as f:
+        bills = json.load(f)
+
+    proposer_bills = await bill_proposer_processor.process_bill_proposers(bills)
+    with open(output_dir / "proposer_bill.json", "w", encoding="utf-8") as f:
+        json.dump(proposer_bills, f, indent=2)

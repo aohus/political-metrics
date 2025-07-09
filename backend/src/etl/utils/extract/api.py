@@ -109,13 +109,13 @@ class HTTPClient:
             )
             timeout = aiohttp.ClientTimeout(total=60, connect=30)
             self.session = aiohttp.ClientSession(connector=connector, timeout=timeout)
-            logger.debug("HTTP 세션 생성됨")
+            logger.info("HTTP 세션 생성됨")
 
     async def close_session(self):
         """세션 종료"""
         if self.session and not self.session.closed:
             await self.session.close()
-            logger.debug("HTTP 세션 종료됨")
+            logger.info("HTTP 세션 종료됨")
         self.session = None
         self._is_session_owner = False
 
@@ -142,46 +142,34 @@ class HTTPClient:
                         "Connection": "keep-alive",
                     }
 
-                    async with self.session.get(
-                        url, params=params, headers=headers, ssl=False
-                    ) as response:
+                    async with self.session.get(url, params=params, headers=headers, ssl=False) as response:
                         if response.status == 200:
                             text = await response.text(encoding="utf-8")
                             content_type = response.headers.get("Content-Type", "")
 
                             # 응답 형식 로깅
-                            format_detected = ResponseParser.detect_format(
-                                text, content_type
-                            )
-                            logger.debug(
-                                f"응답 형식: {format_detected}, Content-Type: {content_type}"
-                            )
+                            format_detected = ResponseParser.detect_format(text, content_type)
+                            logger.debug(f"응답 형식: {format_detected}, Content-Type: {content_type}")
 
                             # 응답 파싱
                             result = self.parser.parse_response(text, content_type)
                             if result is None:
-                                logger.error(
-                                    f"파싱 실패. 응답 내용 일부: {text[:200]}..."
-                                )
+                                logger.error(f"파싱 실패. 응답 내용 일부: {text[:200]}...")
                             return result
                         else:
-                            logger.warning(
-                                f"HTTP 오류: {response.status} - {response.reason}"
-                            )
+                            logger.warning(f"HTTP 오류: {response.status} - {response.reason}")
                             if attempt < max_retries - 1:
                                 await asyncio.sleep(retry_delay)
                                 retry_delay *= 2
                                 continue
                             return None
-
                 except Exception as e:
-                    logger.error(f"요청 오류 (시도 {attempt + 1}): {e}")
+                    logger.error(f"요청 오류 (시도 {attempt + 1}): {e}", exc_info=True)
                     if attempt < max_retries - 1:
                         await asyncio.sleep(retry_delay)
                         retry_delay *= 2
                         continue
                     return None
-
             return None
 
 
@@ -214,22 +202,21 @@ class APIExtractor:
         """수동으로 세션 종료"""
         await self.http_client.close_session()
 
-    async def get_total_count(self, api_name: str, **kwargs) -> int:
+    async def _get_total_count(self, api_name: str, url: str, **kwargs) -> int:
         """총 데이터 개수 확인"""
-        params = self.api_client.validate_params(api_name, **kwargs)
+        params = kwargs.copy()
         params.update(
-            {self.api_client.PAGE_NUM_PARAM: 1, self.api_client.PAGE_SIZE_PARAM: 1}
+            {
+                self.api_client.PAGE_NUM_PARAM: 1,
+                self.api_client.PAGE_SIZE_PARAM: 1,
+            }
         )
-
-        url, req_params = self.api_client.build_url(api_name, **params)
-        result = await self.http_client.make_request(url, req_params)
+        result = await self.http_client.make_request(url, params)
         if result:
             return self.api_client.extract_total_count(api_name, result)
         return 0
 
-    async def fetch_page_data(
-        self, api_name: str, page: int, page_size: int = 100, **kwargs
-    ) -> List[Dict]:
+    async def fetch_page_data(self, url: str, page: int, page_size: int = 100, **kwargs) -> List[Dict]:
         """단일 페이지 데이터 가져오기"""
         params = kwargs.copy()
         params.update(
@@ -238,15 +225,18 @@ class APIExtractor:
                 self.api_client.PAGE_SIZE_PARAM: page_size,
             }
         )
-
-        url, req_args = self.api_client.build_url(api_name, **params)
-        result = await self.http_client.make_request(url, req_args)
+        result = await self.http_client.make_request(url, params)
         return result
+
+    async def _get_request_var(self, api_name: str, **kwargs) -> tuple:
+        url, params = self.api_client.build_url(api_name, **kwargs)
+        return url, params
 
     async def extract(self, api_name: str, **kwargs) -> List[Dict]:
         """데이터 추출 메인 메서드"""
-        total_count = await self.get_total_count(api_name, **kwargs)
-        logger.info(f"총 {total_count}개 항목 발견")
+        url, params = await self._get_request_var(api_name, **kwargs)
+        total_count = await self._get_total_count(api_name, url, **params)
+        logger.info(f"{api_name}: 총 {total_count}개 항목 발견")
 
         if total_count == 0:
             return []
@@ -257,27 +247,26 @@ class APIExtractor:
 
         all_data = []
         for page in tqdm(range(1, total_pages + 1), desc="데이터 수집"):
-            page_data = await self.fetch_page_data(api_name, page, page_size, **kwargs)
+            page_data = await self.fetch_page_data(url, page, page_size, **params)
             all_data.append(page_data)
-
         self.data[api_name] = all_data
         return all_data
 
-    async def extract_multiple(
-        self, api_requests: Dict[str, Dict]
-    ) -> Dict[str, List[Dict]]:
+    async def extract_multiple(self, api_requests: Dict[str, Dict], is_save: bool = True) -> Dict[str, List[Dict]]:
         """여러 API 동시 추출"""
-        tasks = [
-            self.extract(api_name, **params)
-            for api_name, params in api_requests.items()
-        ]
-
+        tasks = [self.extract(api_name, **params) for api_name, params in api_requests.items()]
         results = await asyncio.gather(*tasks)
+        if is_save:
+            return self.save_to_json()
         return dict(zip(api_requests.keys(), results))
 
-    def save_to_json(self, api_name: str, data: List[Dict] = None):
-        """JSON 파일로 저장"""
-        filename = f"{self.output_dir}/{api_name}.json"
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        logger.info(f"데이터 저장 완료: {filename}")
+    def save_to_json(self):
+        data_paths = []
+        for api_name, data in self.data.items():
+            data = self.api_client.extract_rows(api_name, data)
+            filepath = f"{self.output_dir}/{api_name}.json"
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            data_paths.append((api_name, filepath))
+            logger.info(f"데이터 저장 완료: {filepath}")
+        return data_paths

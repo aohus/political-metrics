@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 
-from utils.extract.api_schema import APISchema, BaseAPI
+from ..utils.extract.api_schema import APISchema, BaseAPI
 
 
 def law_total_counter(result: Dict, key: str) -> int:

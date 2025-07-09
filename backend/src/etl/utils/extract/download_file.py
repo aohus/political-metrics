@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 from urllib.parse import parse_qs, urlparse
-
+from ..file import read_file
 import aiofiles
 import aiohttp
 
@@ -36,11 +36,7 @@ class DownloadStats:
 
     @property
     def progress_pct(self) -> float:
-        return (
-            (self.completed + self.failed + self.skipped) / self.total * 100
-            if self.total > 0
-            else 0
-        )
+        return (self.completed + self.failed + self.skipped) / self.total * 100 if self.total > 0 else 0
 
     @property
     def elapsed_time(self) -> float:
@@ -93,9 +89,7 @@ class MassAssemblyPDFDownloader:
 
     async def __aenter__(self):
         """비동기 컨텍스트 매니저 시작"""
-        self.session = aiohttp.ClientSession(
-            headers=self.headers, timeout=self.timeout, connector=self.connector
-        )
+        self.session = aiohttp.ClientSession(headers=self.headers, timeout=self.timeout, connector=self.connector)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -132,9 +126,7 @@ class MassAssemblyPDFDownloader:
                     return bill_info
                 await asyncio.sleep(2**attempt)  # 지수 백오프
 
-    async def _get_bill_info_single(
-        self, bill_url: str, bill_id: str, bill_title: str
-    ) -> BillInfo:
+    async def _get_bill_info_single(self, bill_url: str, bill_id: str, bill_title: str) -> BillInfo:
         """단일 의안 정보 추출"""
         bill_info = BillInfo(bill_id=bill_id, title=bill_title, status="processing")
 
@@ -142,15 +134,11 @@ class MassAssemblyPDFDownloader:
             response.raise_for_status()
             html_content = await response.text()
 
-        bill_info.bill_links, bill_info.conf_links = self._extract_pdf_links(
-            html_content
-        )
+        bill_info.bill_links, bill_info.conf_links = self._extract_pdf_links(html_content)
         bill_info.status = "completed"
         return bill_info
 
-    def _extract_pdf_links(
-        self, html_content: str
-    ) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    def _extract_pdf_links(self, html_content: str) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
         """PDF 링크 추출"""
         bill_links = []
         conf_links = []
@@ -180,9 +168,7 @@ class MassAssemblyPDFDownloader:
                 )
 
         # 회의록 링크 패턴
-        js_conf_pattern = (
-            r"javascript:openConfFile\(['\"]([^'\"]+)['\"],\s*['\"]([^'\"]+)['\"]"
-        )
+        js_conf_pattern = r"javascript:openConfFile\(['\"]([^'\"]+)['\"],\s*['\"]([^'\"]+)['\"]"
         js_matches = re.findall(js_conf_pattern, html_content, re.IGNORECASE)
 
         for match in js_matches:
@@ -202,9 +188,7 @@ class MassAssemblyPDFDownloader:
 
         return bill_links, conf_links
 
-    async def download_pdf_with_retry(
-        self, bill_info: BillInfo, output_dir: str
-    ) -> Optional[Path]:
+    async def download_pdf_with_retry(self, bill_info: BillInfo, output_dir: str) -> Optional[Path]:
         """재시도 로직이 포함된 PDF 다운로드"""
         if not bill_info.bill_links:
             return None
@@ -284,11 +268,7 @@ class MassAssemblyPDFDownloader:
             info_tasks.append(get_info_with_semaphore(bill_id, bill_title))
 
         bill_infos = await asyncio.gather(*info_tasks, return_exceptions=True)
-        valid_bill_infos = [
-            bi
-            for bi in bill_infos
-            if isinstance(bi, BillInfo) and bi.status == "completed"
-        ]
+        valid_bill_infos = [bi for bi in bill_infos if isinstance(bi, BillInfo) and bi.status == "completed"]
 
         # 2단계: PDF 다운로드
         download_tasks = []
@@ -313,15 +293,7 @@ class MassAssemblyPDFDownloader:
         elapsed = self.stats.elapsed_time
         rate = self.stats.completed / elapsed if elapsed > 0 else 0
         eta = (
-            (
-                self.stats.total
-                - self.stats.completed
-                - self.stats.failed
-                - self.stats.skipped
-            )
-            / rate
-            if rate > 0
-            else 0
+            (self.stats.total - self.stats.completed - self.stats.failed - self.stats.skipped) / rate if rate > 0 else 0
         )
 
         self.logger.info(
@@ -331,20 +303,12 @@ class MassAssemblyPDFDownloader:
             f"속도: {rate:.1f}/sec, ETA: {eta:.0f}초"
         )
 
-    def _get_new_bill_list(path: str):
-        with open(path, "r") as f:
-            bills = json.load(f)
+    async def _get_new_bill_list(self, path: str):
+        return await read_file(path)
 
-        return [
-            (bill["BILL_ID"], f"{bill["BILL_NO"]}_{bill["BILL_NAME"]}")
-            for bill in bills
-        ]
+    async def download_mass_bills(self, new_bill_path: str, output_dir: str) -> List[Path]:
 
-    async def download_mass_bills(
-        self, path: str, output_dir: str = "./billsPDF"
-    ) -> List[Path]:
-
-        bill_list = self._get_new_bill_list(path)
+        bill_list = await self._get_new_bill_list(new_bill_path)
 
         """대량 의안 문서 다운로드"""
         self.stats.total = len(bill_list)
@@ -367,14 +331,10 @@ class MassAssemblyPDFDownloader:
             batch_num = i // self.batch_size + 1
             total_batches = (len(bill_list) + self.batch_size - 1) // self.batch_size
 
-            self.logger.info(
-                f"배치 {batch_num}/{total_batches} 처리 중 ({len(batch)}개 의안)"
-            )
+            self.logger.info(f"배치 {batch_num}/{total_batches} 처리 중 ({len(batch)}개 의안)")
 
             try:
-                downloaded_files = await self.process_bill_batch(
-                    batch, output_dir, info_semaphore, download_semaphore
-                )
+                downloaded_files = await self.process_bill_batch(batch, output_dir, info_semaphore, download_semaphore)
                 all_downloaded_files.extend(downloaded_files)
 
                 # 진행상황 로그
@@ -437,8 +397,8 @@ class MassAssemblyPDFDownloader:
 
 
 async def download_mass_assembly_pdfs(
-    path: str,
-    output_dir: str = "./billsPDF",
+    new_bill_list_path: str,
+    output_dir: str,
     max_concurrent_downloads: int = 10,
     max_concurrent_info_fetch: int = 20,
     batch_size: int = 100,
@@ -450,7 +410,7 @@ async def download_mass_assembly_pdfs(
         max_concurrent_info_fetch=max_concurrent_info_fetch,
         batch_size=batch_size,
     ) as downloader:
-        return await downloader.download_mass_bills(path, output_dir)
+        return await downloader.download_mass_bills(new_bill_list_path, output_dir)
 
 
 async def main():
@@ -470,7 +430,7 @@ async def main():
 
     try:
         downloaded_files = await download_mass_assembly_pdfs(
-            "path",
+            "new_bill_path",
             output_dir="./mass_bills_pdf",
             max_concurrent_downloads=15,  # 동시 다운로드 수
             max_concurrent_info_fetch=25,  # 동시 정보 수집 수

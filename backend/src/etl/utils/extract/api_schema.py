@@ -104,14 +104,10 @@ class BaseAPI(ABC):
                 req_params[key] = value
 
         for key, value in kwargs.items():
-            if key in schema.valid_params.keys():
+            if key in schema.valid_params:
                 path_params[key] = value
-            elif key in schema.req_args.keys():
-                req_params[key] = value
-            else:
-                logger.warning(
-                    f"Invalid parameter '{key}:{value}' for API '{api_name}'"
-                )
+            # else:
+            #     logger.warning(f"Invalid parameter '{key}' for API '{api_name}'")
 
         # API 키 추가
         if self.api_key:
@@ -129,7 +125,7 @@ class BaseAPI(ABC):
         full_url = f"{self.BASE_URL}{endpoint}"
 
         if validated_params:
-            return f"{full_url}?{urlencode(validated_params)}"
+            full_url = f"{full_url}?{urlencode(validated_params)}"
         return full_url, req_params
 
     @abstractmethod

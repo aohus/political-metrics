@@ -3,7 +3,8 @@ etl_paths:
   data_root: data
   assembly:
     base: assembly
-    temp: assembly/temp
+    temp_formatted: assembly/temp/formatted
+    temp_raw: assembly/temp/raw
     ref: assembly/ref
     raw: assembly/raw
     formatted: assembly/formatted

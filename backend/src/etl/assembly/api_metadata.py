@@ -19,9 +19,15 @@ class AssemblyAPI(BaseAPI):
     PAGE_SIZE_PARAM = "pSize"
     PAGE_NUM_PARAM = "pIndex"
 
-    def extract_total_count(self, api_name: str, result: Dict) -> int:
+    def extract_total_count(self, api_name: str, result: dict) -> int:
         key = self.get_key(api_name)
         return assembly_total_counter(result, key)
+
+    def extract_rows(self, api_name: str, data: list) -> list:
+        row_data = []
+        for page in data:
+            row_data.extend(page[self.get_endpoint(api_name)][1]["row"])
+        return row_data
 
     # 국회 API 정의
     API_DEFINITIONS: Dict[str, APISchema] = {
@@ -31,7 +37,7 @@ class AssemblyAPI(BaseAPI):
             req_params={
                 "Type": "json",
                 "pIndex": 1,
-                "pSize": 100,
+                "pSize": 1,
                 "KEY": None,
             },
             default_params={
@@ -55,7 +61,7 @@ class AssemblyAPI(BaseAPI):
             req_params={
                 "Type": "json",
                 "pIndex": 1,
-                "pSize": 100,
+                "pSize": 1,
                 "KEY": None,
             },
             default_params={
@@ -82,7 +88,7 @@ class AssemblyAPI(BaseAPI):
             req_params={
                 "Type": "json",
                 "pIndex": 1,
-                "pSize": 100,
+                "pSize": 1,
                 "KEY": None,
             },
             default_params={
@@ -108,7 +114,7 @@ class AssemblyAPI(BaseAPI):
             req_params={
                 "Type": "json",
                 "pIndex": 1,
-                "pSize": 100,
+                "pSize": 1,
                 "KEY": None,
             },
             default_params={
@@ -123,7 +129,7 @@ class AssemblyAPI(BaseAPI):
             req_params={
                 "Type": "json",
                 "pIndex": 1,
-                "pSize": 100,
+                "pSize": 1,
                 "KEY": None,
             },
             default_params={},
