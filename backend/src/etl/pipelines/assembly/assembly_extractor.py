@@ -1,4 +1,4 @@
-from ..utils.extract.api import APIExtractor
+from ...utils.extract.api import APIExtractor
 from .api_metadata import AssemblyAPI
 import logging
 

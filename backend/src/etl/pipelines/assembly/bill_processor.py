@@ -5,10 +5,9 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 from api.model.orm import Bill, BillDetail, BillProposer
-from core.exceptions.exceptions import BillServiceError, DataProcessingError
 from core.schema.utils import BillStatus, ProposerType
-from ..utils.file import read_file
-from ..utils.utils import DateConverter, MemberIdResolver
+from ...utils.file import read_file
+from ...utils.date import DateConverter
 
 logger = logging.getLogger(__name__)
 
@@ -153,71 +152,13 @@ class BillProcessor:
         return BillStatus.LEGISLATION_IN_PROGRESS
 
 
-class BillProposerProcessor:
-    """의안 발의자 처리기"""
-
-    def __init__(self, assembly_ref: str, default_age: str = "22"):
-        self.member_resolver = MemberIdResolver(f"{assembly_ref}/member_id.json")
-        self.default_age = default_age
-
-    async def process_bill_proposers(self, bills: list[dict]) -> list[dict]:
-        """의안 발의자 관계 데이터 생성"""
-        proposers = []
-        for bill_data in bills:
-            bill_id = bill_data["BILL_ID"]
-            proposers.extend(await self._process_lead_proposers(bill_id, bill_data))
-            proposers.extend(await self._process_co_proposers(bill_id, bill_data))
-        return proposers
-
-    async def _process_lead_proposers(self, bill_id: str, bill_data: Dict) -> list[dict]:
-        proposers = []
-        rst_proposers = bill_data.get("RST_PROPOSER")
-
-        if not rst_proposers:
-            return proposers
-
-        if isinstance(rst_proposers, str):
-            rst_proposers = [name.strip() for name in rst_proposers.split(",")]
-
-        member_ids = self.member_resolver.resolve_member_ids(rst_proposers, self.default_age)
-        for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": True})
-        return proposers
-
-    async def _process_co_proposers(self, bill_id: str, bill_data: dict) -> list[dict]:
-        """공동발의자 처리"""
-        proposers = []
-        co_proposers_str = bill_data.get("PUBL_PROPOSER")
-
-        if not co_proposers_str:
-            return proposers
-
-        co_proposer_names = [name.strip() for name in co_proposers_str.split(",")]
-        member_ids = self.member_resolver.resolve_member_ids(co_proposer_names, self.default_age)
-
-        for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": False})
-        return proposers
-
-
-import os
-
-
 async def process(config, data_paths, output_dir: str):
     assembly_ref = config.assembly_ref
-    alter_bill_link = await read_file(os.path.join(assembly_ref, "alter_bill_link.json"))
+    alter_bill_link = await read_file(assembly_ref / "alter_bill_link.json")
 
     bill_processor = BillProcessor(alter_bill_link, output_dir)  # TODO: remove alter_bill_link
-    bill_proposer_processor = BillProposerProcessor(assembly_ref, default_age="22")
     bills, bill_details = await bill_processor.process(data_paths)
 
     for table_name, data in (bills, bill_details):
         with open(output_dir / f"{table_name}.json", "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-
-    with open(config.assembly_temp_raw / "law_bill_member.json", "r") as f:
-        bills = json.load(f)
-
-    proposer_bills = await bill_proposer_processor.process_bill_proposers(bills)
-    with open(output_dir / "proposer_bill.json", "w", encoding="utf-8") as f:
-        json.dump(proposer_bills, f, indent=2)

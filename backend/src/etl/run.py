@@ -3,8 +3,8 @@ from datetime import datetime
 
 from .configs import PathConfig
 from .utils.file import read_file, write_file
-from .assembly.data_pipeline import run as run_assembly_pipeline
-from .document.data_pipeline import run as run_ducument_pipeline
+from .pipelines.assembly.data_pipeline import run as run_assembly_pipeline
+from .pipelines.document.data_pipeline import run as run_ducument_pipeline
 
 # from .law.data_pipeline import run as run_law_pipeline
 
