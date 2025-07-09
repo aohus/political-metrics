@@ -1,7 +1,11 @@
 import logging
 import json
+import asyncio
+from typing import Optional
 
 from core.exceptions.exceptions import DataValidationError
+from ...utils.file import read_file, write_file
+
 
 logger = logging.getLogger(__name__)
 
@@ -13,44 +17,49 @@ class BillProposerProcessor:
         self.member_resolver = MemberIdResolver(f"{assembly_ref}/member_id.json")
         self.default_age = default_age
 
-    async def process_bill_proposers(self, bills: list[dict]) -> list[dict]:
-        """의안 발의자 관계 데이터 생성"""
-        proposers = []
+    async def _get_bill_proposers(self, data_paths: str) -> list[dict]:
+        bills = await self._get_bills(data_paths)
+        rst_proposers, co_proposers = [], []
         for bill_data in bills:
             bill_id = bill_data["BILL_ID"]
-            proposers.extend(await self._process_lead_proposers(bill_id, bill_data))
-            proposers.extend(await self._process_co_proposers(bill_id, bill_data))
-        return proposers
+            rst_proposers.append((bill_id, bill_data["RST_PROPOSER"]))
+            co_proposers.append((bill_id, bill_data["PUBL_PROPOSER"]))
+        return rst_proposers, co_proposers
 
-    async def _process_lead_proposers(self, bill_id: str, bill_data: Dict) -> list[dict]:
-        proposers = []
-        rst_proposers = bill_data.get("RST_PROPOSER")
+    async def _get_bills(self, data_paths: str) -> list[dict]:
+        bills = []
+        for api_name, path in data_paths:
+            if api_name in ("law_bill_member"):
+                data = await read_file(path)
+                bills.extend(data)
+        return bills
 
-        if not rst_proposers:
-            return proposers
+    async def process_bill_proposers(self, data_paths: str) -> list[dict]:
+        """의안 발의자 관계 데이터 생성"""
+        rst_proposers, co_proposers = await self._get_bill_proposer(data_paths)
+        tasks = [
+            self._process_proposers(rst_proposers, is_rst=True),
+            self._process_proposers(co_proposers, is_rst=False),
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        bill_proposers = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(str(result))
+            else:
+                bill_proposers.extend(result)
+        return bill_proposers
 
-        if isinstance(rst_proposers, str):
-            rst_proposers = [name.strip() for name in rst_proposers.split(",")]
-
-        member_ids = self.member_resolver.resolve_member_ids(rst_proposers, self.default_age)
-        for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": True})
-        return proposers
-
-    async def _process_co_proposers(self, bill_id: str, bill_data: dict) -> list[dict]:
-        """공동발의자 처리"""
-        proposers = []
-        co_proposers_str = bill_data.get("PUBL_PROPOSER")
-
-        if not co_proposers_str:
-            return proposers
-
-        co_proposer_names = [name.strip() for name in co_proposers_str.split(",")]
-        member_ids = self.member_resolver.resolve_member_ids(co_proposer_names, self.default_age)
-
-        for member_id in member_ids:
-            proposers.append({"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": False})
-        return proposers
+    async def _process_proposers(self, proposers: list[tuple], is_rst: bool) -> list[dict]:
+        proposer_map = []
+        for bill_id, proposer_str in proposers:
+            if isinstance(proposer_str, str):
+                proposer_names = [name.strip() for name in proposer_str.split(",")]
+            member_ids = self.member_resolver.resolve_member_ids(proposer_names, self.default_age)
+            proposer_map.extend(
+                [{"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": is_rst} for member_id in member_ids]
+            )
+        return proposer_map
 
 
 class MemberIdResolver:
@@ -60,7 +69,6 @@ class MemberIdResolver:
         self.member_dict = self._load_member_dict(member_id_file_path)
 
     def _load_member_dict(self, file_path: str) -> dict:
-        """의원 ID 매핑 딕셔너리 로드"""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -84,3 +92,12 @@ class MemberIdResolver:
             else:
                 logger.warning(f"Member ID not found for: {name} (age: {age})")
         return resolved_ids
+
+
+async def process_proposers(config, data_paths, output_dir: str):
+    assembly_ref = config.assembly_ref
+    bill_proposer_processor = BillProposerProcessor(assembly_ref, default_age="22")
+
+    proposer_bills = await bill_proposer_processor.process_bill_proposers(data_paths)
+    filepath = output_dir / "proposer_bill.json"
+    await write_file(filepath, proposer_bills)
