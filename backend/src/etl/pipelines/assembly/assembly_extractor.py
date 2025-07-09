@@ -14,11 +14,6 @@ async def extract(request_apis: list, output_dir: str):
             multiple_requests = {api_name: dict() for api_name in request_apis}
             results = await extractor.extract_multiple(multiple_requests, is_save=True)
             return results
-            # result_paths = []
-            # for api_name, data in results.items():
-            #     extractor.save_to_json(api_name, data)
-            #     result_paths.append((api_name, output_dir / f"{api_name}.json"))
-            # return result_paths
     except Exception as e:
         logger.error(e, exc_info=True)
     finally:

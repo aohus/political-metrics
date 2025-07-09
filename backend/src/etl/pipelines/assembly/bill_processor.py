@@ -1,26 +1,16 @@
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-import aiofiles
 import pandas as pd
 from api.model.orm import Bill, BillDetail, BillProposer
 from core.exceptions.exceptions import BillServiceError, DataProcessingError
 from core.schema.utils import BillStatus, ProposerType
-from sqlalchemy.exc import SQLAlchemyError
-
+from ..utils.file import read_file
 from ..utils.utils import DateConverter, MemberIdResolver
 
 logger = logging.getLogger(__name__)
-
-
-async def read_data(path: str) -> dict:
-    async with aiofiles.open(path, "r") as f:
-        content = await f.read()
-        data = json.loads(content)
-    return data
 
 
 class BillProcessor:
@@ -43,7 +33,7 @@ class BillProcessor:
         return merged_results
 
     async def transform(self, api_name: str, path: str) -> None:
-        data = await read_data(path)
+        data = await read_file(path)
         handlers = {
             "law_bill_member": self._transform_member_bills,
             "law_bill_gov": self._transform_government_bills,
@@ -215,7 +205,7 @@ import os
 
 async def process(config, data_paths, output_dir: str):
     assembly_ref = config.assembly_ref
-    alter_bill_link = await read_data(os.path.join(assembly_ref, "alter_bill_link.json"))
+    alter_bill_link = await read_file(os.path.join(assembly_ref, "alter_bill_link.json"))
 
     bill_processor = BillProcessor(alter_bill_link, output_dir)  # TODO: remove alter_bill_link
     bill_proposer_processor = BillProposerProcessor(assembly_ref, default_age="22")
