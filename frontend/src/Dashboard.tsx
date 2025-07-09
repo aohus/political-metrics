@@ -1,427 +1,68 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Users, FileText, TrendingUp, Award, Calendar, Building } from 'lucide-react';
-import { apiService, MemberStatisticsResponse, BillStatisticsResponse } from './services/api';
+import React, { useState } from 'react';
+import { Building, TrendingUp, Users, FileText } from 'lucide-react';
+import { TabType, MemberStatisticsResponse } from './types';
+import { LoadingSpinner, ErrorMessage } from './components/ui';
+import { OverviewPage, MemberStatsPage, BillStatsPage } from './pages';
+import { useMembers, useBillStats } from './hooks';
+import { TABS } from './constants';
 
-
-const sampleBillStats: BillStatisticsResponse[] = [
-  { bill_code: "B001", bill_name: "민법 일부개정법률안", bill_committee: "법제사법위원회", bill_count: 15, bill_pass_rate: 73.3 },
-  { bill_code: "B002", bill_name: "소득세법 일부개정법률안", bill_committee: "기획재정위원회", bill_count: 22, bill_pass_rate: 68.2 },
-  { bill_code: "B003", bill_name: "의료법 일부개정법률안", bill_committee: "보건복지위원회", bill_count: 18, bill_pass_rate: 77.8 },
-  { bill_code: "B004", bill_name: "교육기본법 일부개정법률안", bill_committee: "교육위원회", bill_count: 12, bill_pass_rate: 58.3 },
-  { bill_code: "B005", bill_name: "환경정책기본법 일부개정법률안", bill_committee: "환경노동위원회", bill_count: 20, bill_pass_rate: 65.0 }
-];
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'member-detail' | 'bill-stats'>('overview');
+const Dashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedMember, setSelectedMember] = useState<MemberStatisticsResponse | null>(null);
-  const [members, setMembers] = useState<MemberStatisticsResponse[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedAge, setSelectedAge] = useState<string>('22'); // 기본값: 22대
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-    apiService
-      .getMembers()
-      .then((data) => {
-        console.log('Fetched member data:', data);
-        if (mounted) {
-          setMembers(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (mounted) {
-          setError('의원 데이터를 불러오지 못했습니다.');
-          setLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // 데이터 페칭
+  const { members, loading: membersLoading, error: membersError } = useMembers(selectedAge);
+  // const { billStats, loading: billsLoading, error: billsError } = useBillStats();
 
-  // 전체 통계 계산
-  const overallStats = useMemo(() => {
-    const totalMembers = members.length;
-    const totalBills = members.reduce((sum, member) => sum + member.bill_stats.total_count, 0);
-    const avgProposeCnt = 100
-    const avgPassRate =
-      totalMembers === 0
-        ? 0
-        : members.reduce((sum, member) => sum + member.bill_stats.total_pass_rate, 0) / totalMembers;
-    const totalLeadBills = members.reduce((sum, member) => sum + member.bill_stats.lead_count, 0);
+  const loading = membersLoading;
+  const error = membersError;
+  // const loading = membersLoading || billsLoading;
+  // const error = membersError || billsError;
 
-    return {
-      totalMembers,
-      totalBills,
-      avgPassRate: Math.round(avgPassRate * 10) / 10,
-      totalLeadBills,
-    };
-  }, [members]);
-
-  // 정당별 통계
-  const partyStats = useMemo(() => {
-    const partyMap = new Map<string, { name: string; count: number; bills: number; passRate: number }>();
-    members.forEach((member) => {
-      const partyFull = member.member_info.PLPT_NM || '무소속';
-      const party = partyFull.split('/').pop() || '무소속';
-      if (!partyMap.has(party)) {
-        partyMap.set(party, { name: party, count: 0, bills: 0, passRate: 0 });
-      }
-      const partyData = partyMap.get(party)!;
-      partyData.count += 1;
-      partyData.bills += member.bill_stats.total_count;
-      partyData.passRate += member.bill_stats.total_pass_rate;
-    });
-
-    return Array.from(partyMap.values()).map((party) => ({
-      ...party,
-      passRate: Math.round((party.passRate / party.count) * 10) / 10,
-    }));
-  }, [members]);
-
-  const StatCard = ({
-    icon: Icon,
-    title,
-    value,
-    subtitle,
-    color = 'blue',
-  }: {
-    icon: React.ElementType;
-    title: string;
-    value: React.ReactNode;
-    subtitle?: string;
-    color?: string;
-  }) => (
-    <div className={`bg-white rounded-lg shadow-md p-6 border-l-4 border-${color}-500`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
-        </div>
-        <Icon className={`h-8 w-8 text-${color}-500`} />
-      </div>
-    </div>
-  );
-
-  const MemberCard = ({
-    member,
-    onClick,
-  }: {
-    member: MemberStatisticsResponse;
-    onClick: () => void;
-  }) => (
-    <div
-      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow border"
-      onClick={onClick}
-    >
-      <div className="flex items-center space-x-4">
-        <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center">
-          <Users className="w-6 h-6 text-gray-600" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">{member.member_info.NAAS_NM}</h3>
-          <p className="text-sm text-gray-600">{member.member_info.PLPT_NM}</p>
-          <p className="text-sm text-gray-500">{member.member_info.ELECD_DIV_NM}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-medium text-gray-600">총 의안</p>
-          <p className="text-xl font-bold text-blue-600">{member.bill_stats.total_count}</p>
-          <p className="text-sm text-green-600">가결률 {member.bill_stats.total_pass_rate}%</p>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderOverview = () => (
-    <div className="space-y-6">
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          icon={Users}
-          title="총 의원 수"
-          value={overallStats.totalMembers}
-          subtitle="등록된 의원"
-          color="blue"
-        />
-        <StatCard
-          icon={FileText}
-          title="총 의안 수"
-          value={overallStats.totalBills}
-          subtitle="발의된 의안"
-          color="green"
-        />
-        <StatCard
-          icon={TrendingUp}
-          title="평균 가결률"
-          value={`${overallStats.avgPassRate}%`}
-          subtitle="전체 평균"
-          color="purple"
-        />
-        <StatCard
-          icon={Award}
-          title="대표발의"
-          value={overallStats.totalLeadBills}
-          subtitle="대표발의 건수"
-          color="orange"
-        />
-      </div>
-
-      {/* 차트 영역 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 정당별 의원 수 */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">정당별 의원 분포</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={partyStats}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name} (${value})`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="count"
-              >
-                {partyStats.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* 정당별 가결률 */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">정당별 평균 가결률</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={partyStats}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="passRate" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* 의원 목록 */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">의원 목록</h3>
-        <div className="space-y-4">
-          {members.map((member) => (
-            <MemberCard
-              key={member.member_info.MEMBER_ID}
-              member={member}
-              onClick={() => {
-                setSelectedMember(member);
-                setActiveTab('member-detail');
-              }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderMemberDetail = () => {
-    if (!selectedMember) return <div>의원을 선택해주세요.</div>;
-
-    const member = selectedMember;
-    const billTypeData = [
-      { name: '대표발의', value: member.bill_stats.lead_count, rate: member.bill_stats.lead_pass_rate },
-      { name: '공동발의', value: member.bill_stats.co_count, rate: member.bill_stats.co_pass_rate },
-    ];
-
-    return (
-      <div className="space-y-6">
-        {/* 의원 정보 */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center space-x-6">
-            <div className="w-20 h-20 bg-gray-300 rounded-full flex items-center justify-center">
-              <Users className="w-10 h-10 text-gray-600" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-900">{member.member_info.NAAS_NM}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <p className="text-sm text-gray-600">소속정당</p>
-                  <p className="font-medium">{member.member_info.PLPT_NM}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">선거구</p>
-                  <p className="font-medium">{member.member_info.ELECD_DIV_NM}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">소속위원회</p>
-                  <p className="font-medium">{member.member_info.CMIT_NM}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">생년월일</p>
-                  <p className="font-medium">{member.member_info.BIRDY_DT}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 의안 통계 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatCard
-            icon={FileText}
-            title="총 의안 수"
-            value={member.bill_stats.total_count}
-            subtitle={`가결률 ${member.bill_stats.total_pass_rate}%`}
-            color="blue"
-          />
-          <StatCard
-            icon={Award}
-            title="대표발의"
-            value={member.bill_stats.lead_count}
-            subtitle={`가결률 ${member.bill_stats.lead_pass_rate}%`}
-            color="green"
-          />
-          <StatCard
-            icon={Users}
-            title="공동발의"
-            value={member.bill_stats.co_count}
-            subtitle={`가결률 ${member.bill_stats.co_pass_rate}%`}
-            color="purple"
-          />
-        </div>
-
-        {/* 차트 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 발의 유형별 분포 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">발의 유형별 분포</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={billTypeData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 위원회별 활동 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">위원회별 활동</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={member.committee_stats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="active_committee" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total_count" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    );
+  // 의원 선택 핸들러
+  const handleMemberSelect = (member: MemberStatisticsResponse) => {
+    setSelectedMember(member);
+    setActiveTab('member-stats');
   };
 
-  const renderBillStats = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">의안별 통계</h3>
+  // 연령대 변경 핸들러
+  const handleAgeChange = (age: string) => {
+    setSelectedAge(age);
+    setSelectedMember(null); // 필터 변경 시 선택된 의원 초기화
+  };
 
-        {/* 의안 통계 차트 */}
-        <div className="mb-6">
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={sampleBillStats}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bill_name" angle={-45} textAnchor="end" height={100} />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
-              <Legend />
-              <Bar yAxisId="left" dataKey="bill_count" fill="#8884d8" name="의안 수" />
-              <Bar yAxisId="right" dataKey="bill_pass_rate" fill="#82ca9d" name="가결률(%)" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+  // 탭 변경 핸들러
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab !== 'member-stats') {
+      setSelectedMember(null);
+    }
+  };
 
-        {/* 의안 목록 테이블 */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  의안명
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  소관위원회
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  의안 수
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  가결률
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {sampleBillStats.map((bill) => (
-                <tr key={bill.bill_code} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {bill.bill_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {bill.bill_committee}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {bill.bill_count}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        bill.bill_pass_rate >= 70
-                          ? 'bg-green-100 text-green-800'
-                          : bill.bill_pass_rate >= 60
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {bill.bill_pass_rate}%
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
+  // 로딩 상태
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <span className="text-gray-500 text-lg">의원 데이터를 불러오는 중...</span>
-      </div>
-    );
+    return <LoadingSpinner message="데이터를 불러오는 중..." />;
   }
 
+  // 에러 상태
   if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <span className="text-red-500 text-lg">{error}</span>
-      </div>
-    );
+    return <ErrorMessage message={error} onRetry={() => window.location.reload()} />;
   }
+
+  // 탭 아이콘 컴포넌트 매핑
+  const getTabIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'TrendingUp':
+        return TrendingUp;
+      case 'Users':
+        return Users;
+      case 'FileText':
+        return FileText;
+      default:
+        return TrendingUp;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -431,7 +72,12 @@ const Dashboard = () => {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-3">
               <Building className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">국회 의원 및 의안 통계 대시보드</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                국회 의원 및 의안 통계 대시보드
+              </h1>
+            </div>
+            <div className="text-sm text-gray-500">
+              {selectedAge ? `${selectedAge}대 국회` : '전체 국회'}
             </div>
           </div>
         </div>
@@ -441,17 +87,13 @@ const Dashboard = () => {
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
-            {[
-              { id: 'overview', name: '전체 개요', icon: TrendingUp },
-              { id: 'member-detail', name: '의원 상세', icon: Users },
-              { id: 'bill-stats', name: '의안 통계', icon: FileText },
-            ].map((tab) => {
-              const Icon = tab.icon;
+            {TABS.map((tab) => {
+              const Icon = getTabIcon(tab.icon);
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'overview' | 'member-detail' | 'bill-stats')}
-                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                  onClick={() => handleTabChange(tab.id as TabType)}
+                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -468,10 +110,44 @@ const Dashboard = () => {
 
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'member-detail' && renderMemberDetail()}
-        {activeTab === 'bill-stats' && renderBillStats()}
+        {activeTab === 'overview' && (
+          <OverviewPage
+            members={members}
+            // bills={billStats}
+            selectedAge={selectedAge}
+            onAgeChange={handleAgeChange}
+            onMemberSelect={handleMemberSelect}
+          />
+        )}
+        
+        {activeTab === 'member-stats' && (
+          <MemberStatsPage
+            members={members}
+            selectedMember={selectedMember}
+            onMemberSelect={setSelectedMember}
+            selectedAge={selectedAge}
+            onAgeChange={handleAgeChange}
+          />
+        )}
+        
+        {/* {activeTab === 'bill-stats' && (
+          <BillStatsPage
+            bills={billStats}
+            members={members}
+            selectedAge={selectedAge}
+            onAgeChange={handleAgeChange}
+          />
+        )} */}
       </main>
+
+      {/* 푸터 */}
+      <footer className="bg-white border-t mt-12">
+        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+          <div className="text-center text-sm text-gray-500">
+            국회 의원 및 의안 통계 대시보드 - 데이터 기준: {selectedAge ? `${selectedAge}대 국회` : '전체 국회'}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
