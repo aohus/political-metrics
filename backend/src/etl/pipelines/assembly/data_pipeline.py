@@ -1,7 +1,9 @@
 import logging
+import asyncio
 
-from .bill_processor import process
 from .assembly_extractor import extract
+from .bill_processor import process_bills
+from .proposer_processor import process_proposers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,11 +20,18 @@ async def run(config):
         output_dir=assembly_temp_raw,
     )
 
-    await process(
-        config=config,  # TODO: remove config
-        data_paths=data_paths,
-        output_dir=assembly_temp_formatted,
-    )
-
+    tasks = [
+        process_bills(
+            config=config,
+            data_paths=data_paths,
+            output_dir=assembly_temp_formatted,
+        ),
+        process_proposers(
+            config=config,
+            data_paths=data_paths,
+            output_dir=assembly_temp_formatted,
+        ),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     # UpsertDBProcessor.process(assembly_temp_formatted)
     # CleanDirProcessor.process()

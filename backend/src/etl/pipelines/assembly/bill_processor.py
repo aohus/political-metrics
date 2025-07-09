@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from api.model.orm import Bill, BillDetail, BillProposer
 from core.schema.utils import BillStatus, ProposerType
-from ...utils.file import read_file
+from ...utils.file import read_file, write_file
 from ...utils.date import DateConverter
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ class BillProcessor:
         return BillStatus.LEGISLATION_IN_PROGRESS
 
 
-async def process(config, data_paths, output_dir: str):
+async def process_bills(config, data_paths, output_dir: str):
     assembly_ref = config.assembly_ref
     alter_bill_link = await read_file(assembly_ref / "alter_bill_link.json")
 
@@ -160,5 +160,5 @@ async def process(config, data_paths, output_dir: str):
     bills, bill_details = await bill_processor.process(data_paths)
 
     for table_name, data in (bills, bill_details):
-        with open(output_dir / f"{table_name}.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        filepath = output_dir / f"{table_name}.json"
+        await write_file(filepath, data)

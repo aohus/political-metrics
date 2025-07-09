@@ -1,6 +1,9 @@
+import logging
 import aiofiles
 import json
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 async def read_file(filepath: str) -> dict:
@@ -25,3 +28,4 @@ async def write_file(filepath: str, data) -> None:
 
     async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
         await f.write(json.dumps(data, ensure_ascii=False, indent=4))
+    logger.info(f"Write file successfully! File: {filepath}")
