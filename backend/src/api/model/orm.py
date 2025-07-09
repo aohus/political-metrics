@@ -49,10 +49,8 @@ class Member(Base):
 
     __tablename__ = "members"
 
-    MEMBER_ID = Column(
-        String(50), primary_key=True, index=True, comment="국회의원코드"
-    )  # 필수 필드
-    NAAS_NM = Column(String(100), nullable=False, comment="국회의원명")  # 필수 필드
+    MEMBER_ID = Column(String(50), primary_key=True, index=True, comment="국회의원코드")
+    NAAS_NM = Column(String(100), nullable=False, comment="국회의원명")
     BIRDY_DT = Column(String(20), nullable=True, comment="생일일자")
     DTY_NM = Column(String(100), nullable=True, comment="직책명")
     PLPT_NM = Column(String(100), nullable=True, comment="정당명")
@@ -124,9 +122,7 @@ class BillDetail(Base):
 
     __tablename__ = "bill_details"
 
-    BILL_ID = Column(
-        String(100), ForeignKey("bills.BILL_ID"), primary_key=True, comment="의안ID"
-    )
+    BILL_ID = Column(String(100), ForeignKey("bills.BILL_ID"), primary_key=True, comment="의안ID")
     PROC_DT = Column(DateTime, nullable=True, comment="의결일")
     DETAIL_LINK = Column(String(1000), nullable=True, comment="상세페이지")
     LAW_SUBMIT_DT = Column(DateTime, nullable=True, comment="법사위회부일")
@@ -153,9 +149,7 @@ class BillProposer(Base):
 
     __tablename__ = "bill_proposers"
 
-    BILL_ID = Column(
-        String(100), ForeignKey("bills.BILL_ID"), primary_key=True, comment="의안ID"
-    )
+    BILL_ID = Column(String(100), ForeignKey("bills.BILL_ID"), primary_key=True, comment="의안ID")
     MEMBER_ID = Column(
         String(50),
         ForeignKey("members.MEMBER_ID"),
@@ -169,10 +163,7 @@ class BillProposer(Base):
     proposer = relationship("Member", back_populates="proposed_bills")
 
     def __repr__(self):
-        return (
-            f"<BillProposer(BILL_ID='{self.BILL_ID}', MEMBER_ID='{self.MEMBER_ID}', "
-            f"RST={self.RST})>"
-        )
+        return f"<BillProposer(BILL_ID='{self.BILL_ID}', MEMBER_ID='{self.MEMBER_ID}', " f"RST={self.RST})>"
 
 
 class Committee(Base):
@@ -181,19 +172,13 @@ class Committee(Base):
     __tablename__ = "committees"
 
     COMMITTEE_ID = Column(String(20), nullable=True, comment="위원회ID")
-    COMMITTEE_NAME = Column(
-        String(100), nullable=False, primary_key=True, comment="위원회명"
-    )
-    COMMITTEE_TYPE = Column(
-        String(50), nullable=False, default="", comment="위원회유형"
-    )
-    COMMITTEE_TYPE_CODE = Column(
-        String(20), nullable=False, default="", comment="위원회유형코드"
-    )
-    LIMIT_CNT = Column(Integer, nullable=True, comment="위원정수")  # 필수 필드
-    CURR_CNT = Column(Integer, nullable=True, comment="현원")  # 필수 필드
-    POLY99_CNT = Column(Integer, nullable=True, comment="비교섭단체위원수")  # 필수 필드
-    POLY_CNT = Column(Integer, nullable=True, comment="교섭단체위원수")  # 필수 필드
+    COMMITTEE_NAME = Column(String(100), nullable=False, primary_key=True, comment="위원회명")
+    COMMITTEE_TYPE = Column(String(50), nullable=False, default="", comment="위원회유형")
+    COMMITTEE_TYPE_CODE = Column(String(20), nullable=False, default="", comment="위원회유형코드")
+    LIMIT_CNT = Column(Integer, nullable=True, comment="위원정수")
+    CURR_CNT = Column(Integer, nullable=True, comment="현원")
+    POLY99_CNT = Column(Integer, nullable=True, comment="비교섭단체위원수")
+    POLY_CNT = Column(Integer, nullable=True, comment="교섭단체위원수")
     ORDER_NUM = Column(String(20), nullable=True, comment="순서")
 
     # 관계 정의
@@ -201,10 +186,7 @@ class Committee(Base):
     memberships = relationship("CommitteeMember", back_populates="committee")
 
     def __repr__(self):
-        return (
-            f"<Committee(COMMITTEE_ID='{self.COMMITTEE_ID}', "
-            f"COMMITTEE_NAME='{self.COMMITTEE_NAME}')>"
-        )
+        return f"<Committee(COMMITTEE_ID='{self.COMMITTEE_ID}', " f"COMMITTEE_NAME='{self.COMMITTEE_NAME}')>"
 
 
 class CommitteeMember(Base):
@@ -217,9 +199,7 @@ class CommitteeMember(Base):
         primary_key=True,
         comment="위원회ID",
     )
-    MEMBER_ID = Column(
-        String(50), ForeignKey("members.MEMBER_ID"), primary_key=True, comment="의원ID"
-    )  # 필수 필드
+    MEMBER_ID = Column(String(50), ForeignKey("members.MEMBER_ID"), primary_key=True, comment="의원ID")
     MEMBER_TYPE = Column(String(50), nullable=True, comment="의원유형")
 
     # 관계 정의
@@ -237,9 +217,7 @@ class MemberBillStatistic(Base):
     """국회의원 의안관련 통계 테이블"""
 
     __tablename__ = "member_bill_statistics"
-    MEMBER_ID = Column(
-        String(50), ForeignKey("members.MEMBER_ID"), primary_key=True, comment="의원ID"
-    )  # 필수 필드
+    MEMBER_ID = Column(String(50), ForeignKey("members.MEMBER_ID"), primary_key=True, comment="의원ID")
     total_count = Column(Integer, nullable=False, comment="총 발의 의안 수")
     total_pass_rate = Column(Float, nullable=False, comment="의안 통과율")
     lead_count = Column(Integer, nullable=False, comment="대표 발의 의안 수")
@@ -252,7 +230,4 @@ class MemberBillStatistic(Base):
     member = relationship("Member", back_populates="member_bill_stats")
 
     def __repr__(self):
-        return (
-            f"<MemberBillStatistic(MEMBER_ID='{self.MEMBER_ID}'"
-            f"total_count={self.total_count})>"
-        )
+        return f"<MemberBillStatistic(MEMBER_ID='{self.MEMBER_ID}'" f"total_count={self.total_count})>"

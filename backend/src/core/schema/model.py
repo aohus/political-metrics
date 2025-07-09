@@ -20,9 +20,7 @@ class MemberHistory(BaseModel):
     ELECD_NM: Optional[str] = Field(None, description="선거구명", max_length=100)
     ELECD_DIV_NM: Optional[str] = Field(None, description="선거구구분명", max_length=50)
     PLPT_NM: Optional[str] = Field(None, description="정당명", max_length=100)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now().isoformat(), description="생성일시"
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat(), description="생성일시")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -51,14 +49,10 @@ class Member(BaseModel):
     RLCT_DIV_NM: Optional[str] = Field(None, description="재선구분명", max_length=50)
     GTELT_ERACO: Optional[str] = Field(None, description="당선대수", max_length=100)
     NTR_DIV: Optional[Gender] = Field(None, description="성별")
-    NAAS_HP_URL: Optional[str] = Field(
-        None, description="국회의원홈페이지URL", max_length=500
-    )
+    NAAS_HP_URL: Optional[str] = Field(None, description="국회의원홈페이지URL", max_length=500)
     BRF_HST: Optional[str] = Field(None, description="약력")
     NAAS_PIC: Optional[str] = Field(None, description="국회의원 사진", max_length=500)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now().isoformat(), description="생성일시"
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat(), description="생성일시")
 
     model_config = ConfigDict(
         use_enum_values=True,
@@ -118,18 +112,12 @@ class BillDetail(BaseModel):
     LAW_SUBMIT_DT: Optional[datetime] = Field(None, description="법사위회부일")
     LAW_PRESENT_DT: Optional[datetime] = Field(None, description="법사위상정일")
     LAW_PROC_DT: Optional[datetime] = Field(None, description="법사위처리일")
-    LAW_PROC_RESULT_CD: Optional[str] = Field(
-        None, description="법사위처리결과", max_length=50
-    )
+    LAW_PROC_RESULT_CD: Optional[str] = Field(None, description="법사위처리결과", max_length=50)
     COMMITTEE_DT: Optional[datetime] = Field(None, description="소관위회부일")
     CMT_PRESENT_DT: Optional[datetime] = Field(None, description="소관위상정일")
     CMT_PROC_DT: Optional[datetime] = Field(None, description="소관위처리일")
-    CMT_PROC_RESULT_CD: Optional[str] = Field(
-        None, description="소관위처리결과", max_length=50
-    )
-    PROC_RESULT: Optional[str] = Field(
-        None, description="본회의심의결과", max_length=100
-    )
+    CMT_PROC_RESULT_CD: Optional[str] = Field(None, description="소관위처리결과", max_length=50)
+    PROC_RESULT: Optional[str] = Field(None, description="본회의심의결과", max_length=100)
     GVRN_TRSF_DT: Optional[datetime] = Field(None, description="정부 이송일")
     PROM_LAW_NM: Optional[str] = Field(None, description="공포 법률명", max_length=500)
     PROM_DT: Optional[datetime] = Field(None, description="공포일")
@@ -183,6 +171,4 @@ class CommitteeMember(BaseModel):
 
     COMMITTEE_NAME: str = Field(..., description="위원회이름")
     MEMBER_ID: str = Field(..., description="의원ID", max_length=50)
-    MEMBER_TYPE: Optional[str] = Field(
-        None, description="의원유형", max_length=50
-    )  # 위원장/위원/간사
+    MEMBER_TYPE: Optional[str] = Field(None, description="의원유형", max_length=50)
