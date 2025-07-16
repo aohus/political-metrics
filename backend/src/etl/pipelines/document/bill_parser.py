@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Union
 import aiofiles
 import pandas as pd
 
+from ...utils.file import read_file
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,19 +24,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LegalDocumentInfo:
     """법률안 문서 정보를 담는 데이터 클래스"""
-
     title: str = ""
     bill_number: str = ""
     proposal_date: str = ""
     submission_date: str = ""
     is_alternative: bool = False
     alternative_bill_numbers: List[str] = field(default_factory=list)
-    has_comparison_table: bool = False
-    comparison_table: str = ""
+    sections: Dict[str, str] = field(default_factory=dict)
     full_text: str = ""
 
-    # 새로 추가된 섹션 필드들
-    sections: Dict[str, str] = field(default_factory=dict)
+    def to_json(self) -> Dict[str, Any]:
+        """JSON 직렬화"""
+        return {
+            "title": self.title,
+            "bill_number": self.bill_number,
+            "proposal_date": self.proposal_date,
+            "submission_date": self.submission_date,
+            "is_alternative": self.is_alternative,
+            "alternative_bill_numbers": self.alternative_bill_numbers,
+            "sections": self.sections,
+            "full_text": self.full_text,
+        }
 
 
 class BillParser:
@@ -42,21 +52,16 @@ class BillParser:
 
     def __init__(
         self,
-        # config=None,
-        # text_extractor=None,
-        # data_saver=None,
+        data_saver=None,
         max_concurrent: int = 10,
     ):
-        # self.config = config
-        # self.text_extractor = text_extractor(self.config.get("reader_config", {}))
-        # self.data_saver = data_saver(self.config.get("saver_config", {}))
+        self.data_saver = data_saver if data_saver else None
         self.max_concurrent = max_concurrent
         self.semaphore = asyncio.Semaphore(max_concurrent)
 
         # 정규표현식 패턴들
         self.patterns = {
             # 기존 패턴들
-            "bill_number": re.compile(r"의\s*안\s*(?:번\s*호\s*)?(\d+)", re.IGNORECASE),
             "proposal_date": re.compile(
                 r"발의연월일\s*:\s*([0-9]{4}\.\s*[0-9]{1,2}\.\s*[0-9]{1,2}\.?)",
                 re.IGNORECASE,
@@ -70,20 +75,11 @@ class BillParser:
                 r"1\.\s*대안의\s*제안경위(.*?)(?=2\.\s*대안의\s*제안이유|$)",
                 re.DOTALL | re.IGNORECASE,
             ),
-            "bill_number_only": re.compile(r"\b([1-9][0-9]{3,7})\b"),
-            "bill_number": re.compile(r"제([1-9][0-9]{3,7})호"),
-            "comparison_table_patterns": [
-                re.compile(r"신[·•․]\s*구조문대비표", re.IGNORECASE),
-                re.compile(r"신\s*구조문대비표", re.IGNORECASE),
-                re.compile(r"신ㆍ구조문대비표", re.IGNORECASE),
-            ],
-            "comparison_content": re.compile(
-                r"(신[·•․ㆍ]\s*구조문대비표.*?)(?=부\s*칙|$)", re.DOTALL | re.IGNORECASE
-            ),
-            # 새로 추가된 섹션 추출 패턴들
+            "bill_number_int": re.compile(r"\b([1-9][0-9]{3,7})\b"),
+            "bill_number_str": re.compile(r"제([1-9][0-9]{3,7})호"),
             "sections": {
                 "제안이유": re.compile(
-                    r"제안이유\s*(.*?)(?=주요내용|제안이유\s*및\s*주요내용|법률\s*제|참고사항|$)",
+                    r"제안이유\s*(.*?)(?=주요내용|법률\s*제|참고사항|$)",
                     re.DOTALL | re.IGNORECASE,
                 ),
                 "주요내용": re.compile(
@@ -94,18 +90,24 @@ class BillParser:
                     r"제안이유\s*및\s*주요내용\s*(.*?)(?=법률\s*제|참고사항|$)",
                     re.DOTALL | re.IGNORECASE,
                 ),
+                "참고사항": re.compile(
+                    r"참고사항\s*(.*?)(?=법률\s*제|$)",
+                    re.DOTALL | re.IGNORECASE,
+                ),
                 "법률_제_호": re.compile(
                     r"법률\s*제\s*\d*\s*호\s*(.*?)(?=신[·•․ㆍ]\s*구조문대비표|부\s*칙|$)",
                     re.DOTALL | re.IGNORECASE,
                 ),
+                "부칙": re.compile(
+                    r"부\s*칙\s*(.*?)(?=신[·•․ㆍ]\s*구조문대비표|$)", re.DOTALL | re.IGNORECASE
+                ),
                 "신구조문대비표": re.compile(
-                    r"신[·•․ㆍ]\s*구조문대비표\s*(.*?)(?=부\s*칙|$)",
-                    re.DOTALL | re.IGNORECASE,
+                    r"(신[·•․ㆍ]\s*구조문대비표.*?)(?=부\s*칙|$)", re.DOTALL | re.IGNORECASE
                 ),
             },
         }
 
-    def extract_from_text(self, text: str, title: str) -> LegalDocumentInfo:
+    def parse(self, text: str, title: str) -> LegalDocumentInfo:
         """텍스트에서 법률안 정보 추출 (동기 처리 - 정규식 처리는 빠름)"""
         info = LegalDocumentInfo(full_text=text, title=title)
         info.bill_number = title.split("_")[0]
@@ -119,15 +121,16 @@ class BillParser:
             info.submission_date = submission_date_match.group(1).strip()
 
         info.is_alternative = bool(self.patterns["is_alternative"].search(info.title))
-
         if info.is_alternative:
             info.alternative_bill_numbers = self._extract_alternative_bill_numbers(text)
-
-        info.comparison_table = self._extract_comparison_table(text)
 
         info.sections = self._extract_sections(text)
         return info
 
+    def _clean_escape(self, text: str) -> str:
+        """텍스트에서 이스케이프 문자 제거"""
+        return re.sub(r'(?<!\.)\n', '', text)
+    
     def _extract_sections(self, text: str) -> Dict[str, str]:
         """full_text에서 주요 섹션들을 추출"""
         sections = {}
@@ -136,9 +139,13 @@ class BillParser:
             match = pattern.search(text)
             if match:
                 content = match.group(1).strip()
+                if section_name in ["제안이유", "주요내용", "제안이유_및_주요내용"]:
+                    content = self._clean_escape(content)
                 if content:
                     sections[section_name] = content
 
+        if "제안이유_및_주요내용" in sections:
+            del sections["제안이유"], sections["주요내용"]
         return sections
 
     def _extract_alternative_bill_numbers(self, text: str) -> List[str]:
@@ -146,14 +153,13 @@ class BillParser:
         alternative_numbers = []
 
         # "1. 대안의 제안경위" 섹션 찾기
-        # text = text.replace("\n", " ")
         alternative_section_match = self.patterns["alternative_section"].search(text)
 
         if alternative_section_match:
             section_text = alternative_section_match.group(1)
             section_text = section_text.replace("\n", " ")
-            alter_nums = self.patterns["bill_number_only"].findall(section_text)
-            alter_nums += self.patterns["bill_number"].findall(section_text)
+            alter_nums = self.patterns["bill_number_str"].findall(section_text)
+            alter_nums += self.patterns["bill_number_int"].findall(section_text)
             alternative_numbers = list(set(alter_nums))
             filtered = [n for n in alternative_numbers if not re.search(rf"{n}\.", section_text)]
         return filtered
@@ -177,18 +183,14 @@ class BillParser:
             table_text = content_match.group(1)
         else:
             table_text = text[table_start_pos:]
-
-        # table_text = re.sub(r"\n\s*\n", "\n\n", table_text)
-        # table_text = table_text.strip()
-
         return table_text
 
     async def extract_from_file(self, file_path: Union[str, Path]) -> LegalDocumentInfo:
         async with self.semaphore:
             try:
                 title = file_path.split("/")[-1].split(".")[0]
-                text_result = await self.text_extractor.extract(file_path)
-                return self.extract_from_text(text_result, title)
+                text_result = await read_file(file_path)
+                return self.parse(text_result, title)
             except Exception as e:
                 return e
 
@@ -243,39 +245,23 @@ class BillParser:
             print(
                 f"✅ 변환된 의안: ({total_bills}, {success_bills}), 태스크 완료 ({completed_count}/{len(save_tasks)})"
             )
-    
-    async def extract_by_text_extractor(self, file_path: str):
-        """비동기 텍스트 추출기를 통한 정보 추출"""
-        async with self.semaphore:
-            try:
-                info = await self.extract_from_file(file_path)
-            except Exception as e:
-                raise e
-
-            try:
-                await self.data_saver.save(info)
-            except Exception as e:
-                raise e
-            return info
 
 
-# ============ 비동기 편의 함수들 ============
-async def extract_legal_document_info_async(file_path: str) -> LegalDocumentInfo:
+async def parse_doc(file_path: str) -> LegalDocumentInfo:
     """비동기 단일 파일에서 법률안 정보 추출"""
     extractor = BillParser()
     info = await extractor.extract_from_file(file_path)
     return info
 
 
-async def extract_multiple_legal_documents_async(
-    file_paths: List[str], max_concurrent: int = 10, batch_size: int = 50
+async def parse_multiple_docs(
+    file_paths: List[str], data_saver, max_concurrent: int = 10, batch_size: int = 50
 ) -> List[LegalDocumentInfo]:
     """비동기 여러 파일에서 법률안 정보 추출"""
-    extractor = BillParser(max_concurrent=max_concurrent)
+    extractor = BillParser(data_saver=data_saver, max_concurrent=max_concurrent)
 
     if len(file_paths) > batch_size:
         results = await extractor.extract_multiple_files_batched(file_paths, batch_size)
     else:
         results = await extractor.extract_multiple_files(file_paths)
-
     return results

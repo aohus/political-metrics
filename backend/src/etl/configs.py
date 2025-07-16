@@ -1,7 +1,8 @@
-import yaml
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
+
+import yaml
 
 
 @dataclass
@@ -31,10 +32,12 @@ class PathConfig:
         self.assembly_ref = data_root / self.config_data["etl_paths"]["assembly"]["ref"]
         self.assembly_raw = data_root / self.config_data["etl_paths"]["assembly"]["raw"]
         self.assembly_formatted = data_root / self.config_data["etl_paths"]["assembly"]["formatted"]
+        self.alter_bill_link = data_root / self.config_data["etl_paths"]["assembly"]["ref"] / "alter_bill_link.json"
 
         # Document 경로들
         self.document_pdf = data_root / self.config_data["etl_paths"]["document"]["pdf"]
-        self.document_json = data_root / self.config_data["etl_paths"]["document"]["json"]
+        self.document_text = data_root / self.config_data["etl_paths"]["document"]["text"]
+        self.document_parsed = data_root / self.config_data["etl_paths"]["document"]["parsed"]
 
         # Law 경로들
         self.law_raw = data_root / self.config_data["etl_paths"]["law"]["raw"]

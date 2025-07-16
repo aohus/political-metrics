@@ -86,7 +86,7 @@ class PDFTextFileSaver:
                 async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                     await f.write(json_content)
 
-                logger.info(f"JSON 파일 저장 완료: {file_path}")
+                # logger.info(f"JSON 파일 저장 완료: {file_path}")
                 return str(file_path)
 
             except Exception as e:
@@ -151,11 +151,10 @@ class PDFTextFileSaver:
 
                 if i + batch_size < len(data_list):
                     await asyncio.sleep(0.1)
-
             except Exception as e:
                 failed_count += len(batch)
                 results[f"batch_{batch_num}"] = {"error": str(e)}
-            logger.info(f"저장 성공: {success_count}, 실패: {failed_count}")
+            # logger.info(f"저장 성공: {success_count}, 실패: {failed_count}")
         return {
             "total_items": len(data_list),
             "success_count": success_count,
@@ -250,7 +249,7 @@ async def batch_process_and_save(
     }
 
 
-async def save_multiple_bills_async(
+async def save_multiple_bills(
     bill_infos: List[Any], output_dir: str = "bills_output", max_concurrent: int = 15
 ) -> Dict[str, Any]:
     """여러 법률안 정보를 비동기로 저장"""

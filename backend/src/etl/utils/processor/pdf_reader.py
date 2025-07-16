@@ -61,7 +61,9 @@ class PDFTextCleaner:
         """텍스트 정리"""
         if not text:
             return ""
-        return self._clean_page_num(text)
+        text = self._clean_page_num(text)
+        text = self._clean_excape(text)
+        return text
 
     def _clean_excape(self, text: str) -> str:
         # 연속된 개행 정리
@@ -90,6 +92,27 @@ class BasePDFReader:
         """PDF에서 텍스트 추출 (구현 필요)"""
         raise NotImplementedError
 
+    async def extract_multiple_files(
+        self, file_paths: List[str], method: str = "best", batch_size: int = 10
+    ) -> List[Dict[str, Any]]:
+        """여러 PDF 파일을 배치 단위로 처리"""
+        results = []
+
+        for i in range(0, len(file_paths), batch_size):
+            batch = file_paths[i : i + batch_size]
+            batch_tasks = [self.extract(file_path) for file_path in batch]
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+            for j, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    results.append({"file_path": batch[j], "error": str(result)})
+                else:
+                    results.append({"file_path": batch[j], **result})
+
+            if i + batch_size < len(file_paths):
+                await asyncio.sleep(0.1)
+        return results
+    
     async def __aenter__(self):
         return self
 
@@ -517,26 +540,7 @@ class PDFMultiExtractor:
             return None
 
 
-def create_pdf_reader(
-    method: str = "pdfplumber", max_concurrent: int = 5
-) -> BasePDFReader:
-    """비동기 PDF 리더 생성 팩토리 함수"""
-    if method == "pypdf2":
-        return PDFPypdf2Reader(max_concurrent)
-    elif method == "pdfplumber":
-        return PDFPlumberReader(max_concurrent)
-    elif method == "pymupdf":
-        return PDFPyMuReader(max_concurrent)
-    elif method == "pdfminer":
-        return PDFMinerReader(max_concurrent)
-    else:
-        raise ValueError(f"지원하지 않는 방법: {method}")
-
-
-# ============ 편의 함수들 ============
-
-
-async def extract_pdf_text_async(pdf_path: str, method: str = "best") -> Dict[str, Any]:
+async def extract_pdf(pdf_path: str, method: str = "best") -> Dict[str, Any]:
     """단일 PDF 파일에서 비동기 텍스트 추출"""
     if method == "best":
         extractor = PDFMultiExtractor()
@@ -550,7 +554,7 @@ async def extract_pdf_text_async(pdf_path: str, method: str = "best") -> Dict[st
             return {"error": f"지원하지 않는 방법: {method}"}
 
 
-async def extract_multiple_pdfs_async(
+async def extract_multiple_pdfs(
     file_paths: List[str],
     method: str = "best",
     max_concurrent: int = 5,

@@ -1,27 +1,51 @@
+from typing import Any
+
+from ...utils.extract.api import APIExtractor
+from ..pipeline.base_components import BasePipelineImpl
+from ..pipeline.protocols import (
+    BasePipelineImpl,
+    ExtractorProtocol,
+    ProcessorProtocol,
+    SaverProtocol,
+)
 from .api_metadata import LawAPI
-from ..utils.extract.api import APIExtractor
-
-# processing
-# save
 
 
-async def run():
-    api_client = LawAPI()
-    try:
-        async with APIExtractor(api_client, "./law_api/data") as law_extractor:
-            # 여러 API 동시 추출
-            multiple_requests = {
-                "cur_law": {},
-                "cur_admrul": {},
-                "cur_ordin": {},
-                "cur_trty": {},
-            }
-            results = await law_extractor.extract_multiple(multiple_requests)
-            for api_name, data in results.items():
-                law_extractor.save_to_json(api_name, data)
-    except Exception as e:
-        print(f"오류 발생: {e}")
-    finally:
-        print("모든 세션이 정리되었습니다.")
+class LawExtractor:
+    """Extractor for law data following ExtractorProtocol"""
+
+    def __init__(self, api_client: LawAPI):
+        self.api_client = api_client
+
+    async def extract(self, request_apis: list[str], output_dir: str)-> dict[str, Any]:
+        """Extract data from assembly APIs"""
+        request_apis = request_apis or ["cur_law", "cur_admrul", "cur_ordin", "cur_trty"]
+        async with APIExtractor(self.api_client, output_dir) as extractor:
+            multiple_requests = {api_name: dict() for api_name in request_apis}
+            results = await extractor.extract_multiple(multiple_requests, is_save=True)
+            return results
 
 
+class LawPipeline(BasePipelineImpl):
+    """Pipeline for assembly data extraction and processing"""
+
+    def __init__(self, config: Any):
+        super().__init__(config, "AssemblyPipeline")
+        self.extractor: ExtractorProtocol = LawExtractor(LawAPI())
+        self.processors: list[ProcessorProtocol] = []
+
+    async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, Any]:
+        """Execute the law data pipeline"""
+        # Stage 1: Extract data
+        data_paths = await self.stage_processor.execute_stage(
+            "Data Extraction", 
+            self.extractor.extract,
+            request_apis,
+            self.config.law_temp_raw
+        )
+
+        return {
+            "data_paths": data_paths,
+            "process_results": None,
+            "status": "completed"
+        }

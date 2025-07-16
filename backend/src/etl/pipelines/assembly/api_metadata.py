@@ -1,6 +1,7 @@
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from ..utils.extract.api_schema import APISchema, BaseAPI
+from ...utils.extract.api_schema import APISchema, BaseAPI
 
 
 def assembly_total_counter(result: Dict, key: str) -> int:
@@ -135,6 +136,32 @@ class AssemblyAPI(BaseAPI):
             default_params={},
             valid_params={"NAAS_CD", "NAAS_NAME", "BLNG_CMIT_NM", "PLPT_NM"},
             description="전체 국회의원 정보 조회",
+        ),
+        "taking": APISchema( 
+            endpoint="npbzvuwvasdqldskm",
+            key="npbzvuwvasdqldskm",
+            req_params={
+                "Type": "json",
+                "pIndex": 1,
+                "pSize": 10,
+                "KEY": None,
+            },
+            default_params={"TAKING_DATE": str((datetime.now() - timedelta(days=1)).date())},
+            valid_params={"TITLE", "PERSON"},
+            description="국회의원 활동 정보 조회",
+        ),
+        "activity": APISchema(
+            endpoint="NAMEMBEREVENT",
+            key="NAMEMBEREVENT",
+            req_params={
+                "Type": "json",
+                "pIndex": 1,
+                "pSize": 10,
+                "KEY": None,
+            },
+            default_params={"NAAS_CD": "TEST"},
+            valid_params={},
+            description="국회의원 활동 정보 조회",
         ),
         "cur_member": APISchema(
             endpoint="nwvrqwxyaytdsfvhu",

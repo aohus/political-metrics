@@ -9,7 +9,8 @@ etl_paths:
     raw: assembly/raw
     formatted: assembly/formatted
   document:
-    json: document/formatted
+    text: document/text
     pdf: document/pdf
+    parsed: document/parsed
   law:
     raw: law/raw

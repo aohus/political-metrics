@@ -11,6 +11,7 @@ import xmltodict
 from dotenv import load_dotenv
 from tqdm import tqdm
 
+from ...utils.file import write_file
 from .api_schema import BaseAPI
 
 # 로깅 설정
@@ -232,7 +233,7 @@ class APIExtractor:
         url, params = self.api_client.build_url(api_name, **kwargs)
         return url, params
 
-    async def extract(self, api_name: str, **kwargs) -> List[Dict]:
+    async def extract(self, api_name: str, is_save: bool = True, **kwargs) -> List[Dict]:
         """데이터 추출 메인 메서드"""
         url, params = await self._get_request_var(api_name, **kwargs)
         total_count = await self._get_total_count(api_name, url, **params)
@@ -249,24 +250,24 @@ class APIExtractor:
         for page in tqdm(range(1, total_pages + 1), desc="데이터 수집"):
             page_data = await self.fetch_page_data(url, page, page_size, **params)
             all_data.append(page_data)
+        
+        if is_save:
+            return await self.save(api_name, all_data)
+
         self.data[api_name] = all_data
         return all_data
 
     async def extract_multiple(self, api_requests: Dict[str, Dict], is_save: bool = True) -> Dict[str, List[Dict]]:
         """여러 API 동시 추출"""
-        tasks = [self.extract(api_name, **params) for api_name, params in api_requests.items()]
+        tasks = [self.extract(api_name, is_save, **params) for api_name, params in api_requests.items()]
         results = await asyncio.gather(*tasks)
-        if is_save:
-            return self.save_to_json()
         return dict(zip(api_requests.keys(), results))
 
-    def save_to_json(self):
-        data_paths = []
-        for api_name, data in self.data.items():
-            data = self.api_client.extract_rows(api_name, data)
-            filepath = f"{self.output_dir}/{api_name}.json"
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            data_paths.append((api_name, filepath))
-            logger.info(f"데이터 저장 완료: {filepath}")
-        return data_paths
+    async def save(self, api_name: str, data: List[Dict]) -> str:
+        if not data:
+            logger.warning(f"{api_name}: 저장할 데이터가 없습니다.")
+            return ""
+
+        filepath = f"{self.output_dir}/{api_name}_{datetime.now().strftime('%Y-%m-%d')}.json"
+        await write_file(filepath, data)
+        return api_name, filepath

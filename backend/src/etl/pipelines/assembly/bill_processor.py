@@ -6,19 +6,26 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from api.model.orm import Bill, BillDetail, BillProposer
 from core.schema.utils import BillStatus, ProposerType
-from ...utils.file import read_file, write_file
+
 from ...utils.date import DateConverter
+from ...utils.file import read_file, write_file
 
 logger = logging.getLogger(__name__)
 
 
 class BillProcessor:
-    def __init__(self, alter_bill_link: dict, output_dir: str):
+    def __init__(self, config):
         self.date_converter = DateConverter()
-        self.alter_bill_link = alter_bill_link
-        self.output_dir = output_dir
+        self.output_dir = config.assembly_temp_raw
+        self._load_alter_bill_link(config.alter_bill_link)
 
-    async def process(self, path_list: list):
+    def _load_alter_bill_link(self, alter_bill_link: str) -> None:
+        if not self.alter_bill_link:
+            alter_bill_link = self.output_dir / "alter_bill_link.json"
+        with open(alter_bill_link, "r", encoding="utf-8") as f:
+            self.alter_bill_link = json.load(f)
+
+    async def process(self, path_list: list, is_save: bool = True) -> Tuple[List[Dict], List[Dict]]:
         tasks = [self.transform(api_name, path) for api_name, path in path_list]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         merged_results = []
@@ -28,7 +35,7 @@ class BillProcessor:
                 raise result
             else:
                 merged_results.extend(result)
-        merged_results = await self.convert_to_table_format(merged_results)
+        merged_results = await self.convert_to_table_format(merged_results, is_save=is_save)
         return merged_results
 
     async def transform(self, api_name: str, path: str) -> None:
@@ -73,7 +80,7 @@ class BillProcessor:
         df = df.drop(columns=["COMMITTEE_PROC_DT", "RST_MONA_CD"], errors="ignore")
         return df.to_dict(orient="records")
 
-    async def convert_to_table_format(self, bills: list):
+    async def convert_to_table_format(self, bills: list, is_save: bool = True) -> Tuple[List[Dict], List[Dict]]:
         bill_list, bill_detail_list = [], []
         try:
             for bill in bills:
@@ -86,7 +93,21 @@ class BillProcessor:
                 bill_detail_list.append({field: bill.get(field, None) for field in BillDetail.__table__.columns.keys()})
         except Exception as e:
             logger.error(e, exc_info=True)
+        
+        if is_save:
+            await self.save(bill_list, bill_detail_list)
         return ("bills", bill_list), ("bill_details", bill_detail_list)
+
+    async def save(self, bills: List[Dict], bill_details: List[Dict]) -> None:
+        """Save bills and bill details to JSON files"""
+        try:
+            tasks = [
+                write_file(self.output_dir / "bills.json", bills),
+                write_file(self.output_dir / "bill_details.json", bill_details)
+            ]
+            asyncio.run(asyncio.gather(*tasks))
+        except Exception as e:
+            logger.error(f"Failed to save bills: {e}", exc_info=True)
 
     def _link_alter_bill_no(self, bill_no: str) -> list:
         try:
@@ -94,7 +115,7 @@ class BillProcessor:
                 bill_no = "22" + bill_no.zfill(5)
             return self.alter_bill_link[bill_no]
         except:
-            # logger.error(f"Fail to find alternative bill number: {bill_no}")
+            logger.error(f"Fail to find alternative bill number: {bill_no}")
             return None
 
     def _determine_bill_status(self, bill_data: Dict) -> str:

@@ -1,11 +1,11 @@
-import logging
-import json
 import asyncio
+import json
+import logging
 from typing import Optional
 
 from core.exceptions.exceptions import DataValidationError
-from ...utils.file import read_file, write_file
 
+from ...utils.file import read_file, write_file
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,28 @@ logger = logging.getLogger(__name__)
 class BillProposerProcessor:
     """의안 발의자 처리기"""
 
-    def __init__(self, assembly_ref: str, default_age: str = "22"):
-        self.member_resolver = MemberIdResolver(f"{assembly_ref}/member_id.json")
+    def __init__(self, config, default_age: str = "22"):
+        self.member_resolver = MemberIdResolver(f"{config.assembly_ref}/member_id.json")
         self.default_age = default_age
+
+    async def process(self, data_paths: str, is_save: bool = True) -> list[dict]:
+        """의안 발의자 관계 데이터 생성"""
+        rst_proposers, co_proposers = await self._get_bill_proposer(data_paths)
+        tasks = [
+            self._process_proposers(rst_proposers, is_rst=True),
+            self._process_proposers(co_proposers, is_rst=False),
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        bill_proposers = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(str(result))
+            else:
+                bill_proposers.extend(result)
+
+        if is_save:
+            await self.save(bill_proposers)
+        return bill_proposers
 
     async def _get_bill_proposers(self, data_paths: str) -> list[dict]:
         bills = await self._get_bills(data_paths)
@@ -34,22 +53,6 @@ class BillProposerProcessor:
                 bills.extend(data)
         return bills
 
-    async def process_bill_proposers(self, data_paths: str) -> list[dict]:
-        """의안 발의자 관계 데이터 생성"""
-        rst_proposers, co_proposers = await self._get_bill_proposer(data_paths)
-        tasks = [
-            self._process_proposers(rst_proposers, is_rst=True),
-            self._process_proposers(co_proposers, is_rst=False),
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        bill_proposers = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(str(result))
-            else:
-                bill_proposers.extend(result)
-        return bill_proposers
-
     async def _process_proposers(self, proposers: list[tuple], is_rst: bool) -> list[dict]:
         proposer_map = []
         for bill_id, proposer_str in proposers:
@@ -60,6 +63,12 @@ class BillProposerProcessor:
                 [{"BILL_ID": bill_id, "MEMBER_ID": member_id, "RST": is_rst} for member_id in member_ids]
             )
         return proposer_map
+    
+    async def save(self, data: list[dict]) -> None:
+        try:
+            await write_file(self.output_dir / "proposer_bill.json", data),
+        except Exception as e:
+            logger.error(f"Failed to save bill processors: {e}", exc_info=True)
 
 
 class MemberIdResolver:
@@ -92,12 +101,3 @@ class MemberIdResolver:
             else:
                 logger.warning(f"Member ID not found for: {name} (age: {age})")
         return resolved_ids
-
-
-async def process_proposers(config, data_paths, output_dir: str):
-    assembly_ref = config.assembly_ref
-    bill_proposer_processor = BillProposerProcessor(assembly_ref, default_age="22")
-
-    proposer_bills = await bill_proposer_processor.process_bill_proposers(data_paths)
-    filepath = output_dir / "proposer_bill.json"
-    await write_file(filepath, proposer_bills)

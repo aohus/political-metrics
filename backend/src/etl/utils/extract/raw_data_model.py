@@ -298,24 +298,41 @@ class RawSNSData:
 
 
 @dataclass
-class RawPolicySeminarData:
+class RawActivityData:
     """
-    원시 정책세미나 데이터
-    https://open.assembly.go.kr/portal/data/service/selectServicePage.do?infId=OQ0A0T0011366V19103
+    원시 국회의원 활동 데이터
+    https://open.assembly.go.kr/portal/data/service/selectServicePage.do?infId=OOWY4R001216HX11501
     """
 
-    TITLE: str = ""  # 제목
-    SEMINAR_DIV_CODE: str = ""  # 구분
-    HOST_DT: str = ""  # 개최일시
-    HOST_PLACE_NAME: str = ""  # 장소
-    HOST_INS_NAME: str = ""  # 주최
-    ATTENDANCE_NAME1: str = ""  # 발제자
-    ATTENDANCE_NAME2: str = ""  # 토론자
-    DETAIL_VIEW_URL: str = ""  # 상세보기URL
+    NAAS_NM: str = "" # 국회의원명	
+    EV_TTL: str = "" # 행사 제목  
+    EV_DTM: str = "" # 행사 일시  
+    EV_PLC: str = "" # 행사 장소  
+    LINK_URL: str = "" # 행사 URL
 
     # 메타데이터
-    api_name: str = "policy_seminars"
-    source_api: str = "https://open.assembly.go.kr/portal/openapi/bqbmccpamsvwebkn"
+    api_name: str = "activity"
+    source_api: str = "https://open.assembly.go.kr/portal/openapi/NAMEMBEREVENT"
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+
+
+@dataclass
+class RawTakingData:
+    """
+    원시 국회의원 기자회견 데이터
+    https://open.assembly.go.kr/portal/data/service/selectServicePage.do?infId=OZY6M30010164K11655
+    """
+
+    TAKING_DATE: str = "" # 회견일, 
+    OPEN_TIME: str = "" # 회견시각, 
+    TITLE: str = "" # 제목, 
+    PERSON: str = "" # 발언자, 
+    REC_TIME: str = "" # 재생시간, 
+    LINK_URL: str = "" # 링크 URL 
+
+    # 메타데이터
+    api_name: str = "taking"
+    source_api: str = "https://open.assembly.go.kr/portal/openapi/npbzvuwvasdqldskm"
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
