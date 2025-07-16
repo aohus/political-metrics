@@ -5,7 +5,7 @@ from typing import Optional
 
 from core.exceptions.exceptions import DataValidationError
 
-from ...utils.file import read_file, write_file
+from ...utils.file.fileio import read_file, write_file
 
 logger = logging.getLogger(__name__)
 

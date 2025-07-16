@@ -8,7 +8,7 @@ from api.model.orm import Bill, BillDetail, BillProposer
 from core.schema.utils import BillStatus, ProposerType
 
 from ...utils.date import DateConverter
-from ...utils.file import read_file, write_file
+from ...utils.file.fileio import read_file, write_file
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ from pipelines.document.data_pipeline import DocumentPipeline
 from pipelines.pipeline.protocols import PipelineProtocol
 
 from .configs import PathConfig
-from .utils.file import read_file, write_file
+from .utils.file.fileio import read_file, write_file
 
 
 class PipelineOrchestrator:

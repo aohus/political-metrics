@@ -1,37 +1,17 @@
 import logging
-from typing import Any, Dict
 
-from ...utils.extract.api import APIExtractor
 from ..pipeline.base_components import BasePipelineImpl
-from ..pipeline.protocols import (
-    BasePipelineImpl,
-    ExtractorProtocol,
-    ProcessorProtocol,
-    SaverProtocol,
-)
+from ..pipeline.protocols import ExtractorProtocol, ProcessorProtocol, SaverProtocol
 from .api_metadata import AssemblyAPI
+from .assembly_extractor import AssemblyExtractor
 from .bill_processor import BillProcessor
 from .proposer_processor import BillProposerProcessor
-
-
-class AssemblyExtractor:
-    """Extractor for assembly data following ExtractorProtocol"""
-
-    def __init__(self, api_client: AssemblyAPI):
-        self.api_client = api_client
-
-    async def extract(self, request_apis: list[str], output_dir: str) -> dict[str, Any]:
-        """Extract data from assembly APIs"""
-        async with APIExtractor(self.api_client, output_dir) as extractor:
-            multiple_requests = {api_name: dict() for api_name in request_apis}
-            results = await extractor.extract_multiple(multiple_requests, is_save=True)
-            return results
 
 
 class AssemblyPipeline(BasePipelineImpl):
     """Pipeline for assembly data extraction and processing"""
 
-    def __init__(self, config: Any):
+    def __init__(self, config: any):
         super().__init__(config, "AssemblyPipeline")
         self.extractor: ExtractorProtocol = AssemblyExtractor(AssemblyAPI())
         self.processors: list[ProcessorProtocol] = [
@@ -39,7 +19,7 @@ class AssemblyPipeline(BasePipelineImpl):
             BillProposerProcessor(config)
         ]
 
-    async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, Any]:
+    async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
         """Execute the assembly data pipeline"""
         data_paths = await self.stage_processor.execute_stage(
             "Data Extraction", 

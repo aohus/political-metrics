@@ -1,6 +1,6 @@
 from typing import Any
 
-from ...utils.extract.api import APIExtractor
+from ...utils.extract.api_extractor import APIExtractor
 from ..pipeline.base_components import BasePipelineImpl
 from ..pipeline.protocols import (
     BasePipelineImpl,

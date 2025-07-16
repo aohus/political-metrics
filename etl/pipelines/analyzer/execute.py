@@ -4,11 +4,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from .analyzer import AsyncPoliticalBillAnalyzer, progress_callback
+from .bill_analyzer import PoliticalBillAnalyzer, progress_callback
 
 
 async def analyze_massive_directory(directory_path, output_path, batch_size=100):
-    analyzer = AsyncPoliticalBillAnalyzer(max_concurrent_tasks=50)
+    analyzer = PoliticalBillAnalyzer(max_concurrent_tasks=50)
 
     try:
         pdf_files = list(Path(directory_path).rglob("*.json"))

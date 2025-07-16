@@ -1,17 +1,19 @@
 import asyncio
-import aiofiles
-import pdfplumber
-import re
 import json
-import pandas as pd
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
-import os
-from datetime import datetime
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import os
+import re
 import time
-from ...utils.file import read_file
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional, Union
+
+import aiofiles
+import pandas as pd
+import pdfplumber
+
+from ...utils.file.fileio import read_file
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +48,7 @@ class AnalysisResult:
     social_impact: str
 
 
-class AsyncPoliticalBillAnalyzer:
+class PoliticalBillAnalyzer:
     def __init__(self, max_concurrent_tasks: int = 10):
         self.max_concurrent_tasks = max_concurrent_tasks
         self.semaphore = asyncio.Semaphore(max_concurrent_tasks)
@@ -1496,7 +1498,7 @@ def progress_callback(current, total, current_file):
 
 # async def main():
 #     """메인 실행 함수"""
-#     analyzer = AsyncPoliticalBillAnalyzer(max_concurrent_tasks=20)
+#     analyzer = PoliticalBillAnalyzer(max_concurrent_tasks=20)
 
 #     try:
 #         # 단일 법안 분석 예제
