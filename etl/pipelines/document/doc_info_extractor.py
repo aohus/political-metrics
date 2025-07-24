@@ -5,8 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import aiohttp
-
-from ...utils.download.base_downloader import DownloadItem
+from utils.download.base_downloader import DownloadItem
 
 
 @dataclass

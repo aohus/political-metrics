@@ -7,10 +7,10 @@ from typing import Any, Optional, Protocol, runtime_checkable
 @dataclass
 class DownloadItem:
     """다운로드할 항목의 기본 정보"""
-    item_id: Optional[str] = None
-    title: Optional[str] = None
     url: str
     filename: str
+    item_id: Optional[str] = None
+    title: Optional[str] = None
     metadata: dict[str, Any] = None
 
     def __post_init__(self):

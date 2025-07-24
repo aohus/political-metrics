@@ -1,9 +1,7 @@
-from typing import Dict, Optional
-
-from ..utils.extract.api_schema import APISchema, BaseAPI
+from utils.api.api_schema import APISchema, BaseAPI
 
 
-def law_total_counter(result: Dict, key: str) -> int:
+def law_total_counter(result: dict, key: str) -> int:
     """법령 API 응답에서 총 개수 추출"""
     if key in result:
         total_cnt = result[key].get("totalCnt")
@@ -20,11 +18,11 @@ class LawAPI(BaseAPI):
     PAGE_SIZE_PARAM = "numOfRows"
     PAGE_NUM_PARAM = "pageNo"
 
-    def extract_total_count(self, api_name: str, result: Dict) -> int:
+    def extract_total_count(self, api_name: str, result: dict) -> int:
         key = self.get_count_key(api_name)
         return law_total_counter(result, key)
 
-    API_DEFINITIONS: Dict[str, APISchema] = {
+    API_DEFINITIONS: dict[str, APISchema] = {
         "cur_law": APISchema(
             key="law",
             count_key="LawSearch",

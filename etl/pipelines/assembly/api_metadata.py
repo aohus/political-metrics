@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from ...utils.extract.api_schema import APISchema, BaseAPI
+from utils.api.api_schema import APISchema, BaseAPI
 
 
 def assembly_total_counter(result: Dict, key: str) -> int:

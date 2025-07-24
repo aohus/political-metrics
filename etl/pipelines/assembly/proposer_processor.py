@@ -3,9 +3,8 @@ import json
 import logging
 from typing import Optional
 
-from core.exceptions.exceptions import DataValidationError
-
-from ...utils.file.fileio import read_file, write_file
+from exceptions.exceptions import DataValidationError
+from utils.file.fileio import read_file, write_file
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class BillProposerProcessor:
 
     async def process(self, data_paths: str, is_save: bool = True) -> list[dict]:
         """의안 발의자 관계 데이터 생성"""
-        rst_proposers, co_proposers = await self._get_bill_proposer(data_paths)
+        rst_proposers, co_proposers = await self._get_bill_proposers(data_paths)
         tasks = [
             self._process_proposers(rst_proposers, is_rst=True),
             self._process_proposers(co_proposers, is_rst=False),
@@ -34,6 +33,7 @@ class BillProposerProcessor:
 
         if is_save:
             await self.save(bill_proposers)
+            return self.output_dir
         return bill_proposers
 
     async def _get_bill_proposers(self, data_paths: str) -> list[dict]:
@@ -48,7 +48,7 @@ class BillProposerProcessor:
     async def _get_bills(self, data_paths: str) -> list[dict]:
         bills = []
         for api_name, path in data_paths:
-            if api_name in ("law_bill_member"):
+            if api_name == "law_bill_member":
                 data = await read_file(path)
                 bills.extend(data)
         return bills

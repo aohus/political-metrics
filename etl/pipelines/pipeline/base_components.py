@@ -36,13 +36,13 @@ class StageProcessor:
         return await asyncio.gather(*tasks, return_exceptions=return_exceptions)
     
     async def execute_processors(self, processors: list[ProcessorProtocol], 
-                               data: Any, config: Any, output_dir: str) -> list[Any]:
+                               data: Any, config: Any = "", output_dir: str = "") -> list[Any]:
         """Execute multiple processors that follow ProcessorProtocol"""
         stages = [
             (f"Process {processor.__class__.__name__}", processor.process, (), {
-                "data": data,
-                "config": config,
-                "output_dir": output_dir
+                "data_paths": data,
+                # "config": "",
+                # "output_dir": ""
             })
             for processor in processors
         ]

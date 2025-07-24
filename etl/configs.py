@@ -1,12 +1,10 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
 
 import yaml
 
 
-@dataclass
-class PathConfig:
+class Config:
     """설정 파일 기반 경로 관리"""
 
     def __init__(self, config_file: str = None):
@@ -33,7 +31,6 @@ class PathConfig:
         self.assembly_raw = data_root / self.config_data["etl_paths"]["assembly"]["raw"]
         self.assembly_formatted = data_root / self.config_data["etl_paths"]["assembly"]["formatted"]
         self.alter_bill_link = data_root / self.config_data["etl_paths"]["assembly"]["ref"] / "alter_bill_link.json"
-
         # Document 경로들
         self.document_pdf = data_root / self.config_data["etl_paths"]["document"]["pdf"]
         self.document_text = data_root / self.config_data["etl_paths"]["document"]["text"]
@@ -50,7 +47,8 @@ class PathConfig:
             self.assembly_ref,
             self.assembly_raw,
             self.assembly_formatted,
-            self.document_json,
+            self.document_text,
+            self.document_parsed,
             self.document_pdf,
             self.law_raw,
         ]

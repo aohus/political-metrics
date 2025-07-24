@@ -2,15 +2,14 @@ environment: development
 etl_paths:
   data_root: data
   assembly:
-    base: assembly
-    temp_formatted: assembly/temp/formatted
     temp_raw: assembly/temp/raw
+    temp_formatted: assembly/temp/formatted
     ref: assembly/ref
     raw: assembly/raw
     formatted: assembly/formatted
   document:
-    text: document/text
-    pdf: document/pdf
-    parsed: document/parsed
+    text: document/temp/text
+    pdf: document/temp/pdf
+    parsed: document/temp/parsed
   law:
     raw: law/raw

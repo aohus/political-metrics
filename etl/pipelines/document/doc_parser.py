@@ -8,8 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiofiles
 import pandas as pd
-
-from ...utils.file.fileio import read_file
+from utils.file.fileio import read_file
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)

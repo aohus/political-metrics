@@ -5,8 +5,8 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from tqdm import tqdm
+from utils.file.fileio import write_file
 
-from ...utils.file.fileio import write_file
 from ..http.client import HTTPClient
 from .api_schema import BaseAPI
 

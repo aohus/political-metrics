@@ -1,5 +1,6 @@
 from datetime import datetime
-from core.exceptions.exceptions import DataValidationError
+
+from exceptions.exceptions import DataValidationError
 
 
 class DateConverter:

@@ -1,4 +1,4 @@
-from ...utils.pdf.pdf_reader import extract_multiple_pdfs
+from utils.pdf.pdf_reader import extract_multiple_pdfs
 
 
 class PDFProcessor:

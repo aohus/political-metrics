@@ -1,14 +1,19 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import Dict, List, Tuple
 
 import pandas as pd
-from api.model.orm import Bill, BillDetail, BillProposer
-from core.schema.utils import BillStatus, ProposerType
-
-from ...utils.date import DateConverter
-from ...utils.file.fileio import read_file, write_file
+from models.assembly_model import (
+    Bill,
+    BillDetail,
+    BillProposer,
+    BillStatus,
+    ProposerType,
+)
+from utils.date import DateConverter
+from utils.file.fileio import read_file, write_file
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +21,18 @@ logger = logging.getLogger(__name__)
 class BillProcessor:
     def __init__(self, config):
         self.date_converter = DateConverter()
-        self.output_dir = config.assembly_temp_raw
+        self.output_dir = config.assembly_temp_formatted
+        self.alter_bills = ""
         self._load_alter_bill_link(config.alter_bill_link)
 
     def _load_alter_bill_link(self, alter_bill_link: str) -> None:
-        if not self.alter_bill_link:
-            alter_bill_link = self.output_dir / "alter_bill_link.json"
+        if not alter_bill_link:
+            alter_bill_link = "./alter_bill_link.json"
         with open(alter_bill_link, "r", encoding="utf-8") as f:
-            self.alter_bill_link = json.load(f)
+            self.alter_bills = json.load(f)
 
-    async def process(self, path_list: list, is_save: bool = True) -> Tuple[List[Dict], List[Dict]]:
-        tasks = [self.transform(api_name, path) for api_name, path in path_list]
+    async def process(self, data_paths: list, is_save: bool = True) -> Tuple[List[Dict], List[Dict]]:
+        tasks = [self.transform(api_name, path) for api_name, path in data_paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         merged_results = []
         for i, result in enumerate(results):
@@ -37,9 +43,20 @@ class BillProcessor:
                 merged_results.extend(result)
         merged_results = await self.convert_to_table_format(merged_results, is_save=is_save)
         return merged_results
-
+    
+    def extract_rows(self, api, data: list) -> list:
+        rows = []
+        end = "TVBPMBILL11"
+        if api == "law_bill_member":
+            end = "nzmimeepazxkubdpn"
+        for page in data:
+            rows.extend(page[end][1]["row"])
+        return rows
+        
     async def transform(self, api_name: str, path: str) -> None:
         data = await read_file(path)
+        data = self.extract_rows(api_name, data)
+
         handlers = {
             "law_bill_member": self._transform_member_bills,
             "law_bill_gov": self._transform_government_bills,
@@ -89,23 +106,24 @@ class BillProcessor:
                 if bill["STATUS"] in [BillStatus.AMENDED_DISCARDED, BillStatus.ALTERNATIVE_DISCARDED]:
                     alter_no = self._link_alter_bill_no(bill["BILL_NO"])
                     bill["ALTER_BILL_NO"] = alter_no
-                bill_list.append({field: bill.get(field, None) for field in Bill.__table__.columns.keys()})
-                bill_detail_list.append({field: bill.get(field, None) for field in BillDetail.__table__.columns.keys()})
+                bill_list.append({field: bill.get(field, None) for field in Bill.__dataclass_fields__.keys()})
+                bill_detail_list.append({field: bill.get(field, None) for field in BillDetail.__dataclass_fields__.keys()})
         except Exception as e:
             logger.error(e, exc_info=True)
         
         if is_save:
             await self.save(bill_list, bill_detail_list)
+            return self.output_dir
         return ("bills", bill_list), ("bill_details", bill_detail_list)
 
     async def save(self, bills: List[Dict], bill_details: List[Dict]) -> None:
         """Save bills and bill details to JSON files"""
         try:
             tasks = [
-                write_file(self.output_dir / "bills.json", bills),
-                write_file(self.output_dir / "bill_details.json", bill_details)
+                write_file(self.output_dir / f"bills_{datetime.now().strftime('%Y-%m-%d')}.json", bills),
+                write_file(self.output_dir / f"bill_details_{datetime.now().strftime('%Y-%m-%d')}.json", bill_details)
             ]
-            asyncio.run(asyncio.gather(*tasks))
+            asyncio.gather(*tasks)
         except Exception as e:
             logger.error(f"Failed to save bills: {e}", exc_info=True)
 
@@ -113,7 +131,7 @@ class BillProcessor:
         try:
             if len(bill_no) <= 5:
                 bill_no = "22" + bill_no.zfill(5)
-            return self.alter_bill_link[bill_no]
+            return self.alter_bills[bill_no]
         except:
             logger.error(f"Fail to find alternative bill number: {bill_no}")
             return None
