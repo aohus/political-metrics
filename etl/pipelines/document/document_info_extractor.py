@@ -6,6 +6,7 @@ from typing import Optional
 
 import aiohttp
 from utils.download.base_downloader import DownloadItem
+from utils.http.client import HTTPClient
 
 
 @dataclass
@@ -24,55 +25,35 @@ class DocumentInfoExtractor:
     def __init__(
         self,
         max_concurrent_info_fetch: int = 20,
+        retry_attempts: int = 3,
         delay_between_requests: float = 0.5
     ):
         self.base_url = "https://likms.assembly.go.kr/bill/billDetail.do?billId="
-        self.max_concurrent_info_fetch = max_concurrent_info_fetch
-        self.delay_between_requests = delay_between_requests
-        
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3",
-            "Accept-Encoding": "gzip, deflate",
-            "DNT": "1",
-            "Connection": "keep-alive",
-        }
+        self.http_client = HTTPClient(max_concurrent_info_fetch, retry_attempts, delay_between_requests)
         
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.session: Optional[aiohttp.ClientSession] = None
 
     async def __aenter__(self):
-        """비동기 컨텍스트 매니저 시작"""
-        connector = aiohttp.TCPConnector(limit=100, limit_per_host=30)
-        timeout = aiohttp.ClientTimeout(total=30, connect=10)
-        self.session = aiohttp.ClientSession(
-            headers=self.headers,
-            timeout=timeout,
-            connector=connector
-        )
+        """Context manager 진입"""
+        await self.http_client.create_session()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """비동기 컨텍스트 매니저 종료"""
-        if self.session:
-            await self.session.close()
+        """Context manager 종료"""
+        await self.http_client.close_session()
+
+    async def close(self):
+        """수동으로 세션 종료"""
+        await self.http_client.close_session()
 
     async def extract_download_info(self, bill_id: str, title: str) -> list[DownloadItem]:
         """단일 의안의 다운로드 정보 추출"""
-        bill_info = await self._get_bill_info_with_retry(bill_id, title)
+        bill_info = await self._get_bill_info_single(bill_id, title)
         return self.convert_to_download_items(bill_info)
 
     async def extract_batch_info(self, items: list[tuple]) -> list[DownloadItem]:
         """배치 단위로 의안 정보 추출"""
-        semaphore = asyncio.Semaphore(self.max_concurrent_info_fetch)
-
-        async def extract_with_semaphore(bill_id: str, title: str):
-            async with semaphore:
-                await asyncio.sleep(self.delay_between_requests)
-                return await self.extract_download_info(bill_id, title)
-
-        tasks = [extract_with_semaphore(bill_id, title) for bill_id, title in items]
+        tasks = [self.extract_download_info(bill_id, title) for bill_id, title in items]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_items = []
@@ -83,31 +64,12 @@ class DocumentInfoExtractor:
                 all_items.extend(result)
         return all_items
 
-    async def _get_bill_info_with_retry(self, bill_id: str, title: str, retry_attempts: int = 3) -> DocumentInfo:
-        """재시도 로직이 포함된 의안 정보 추출"""
-        bill_url = self.base_url + bill_id
-
-        for attempt in range(retry_attempts):
-            try:
-                return await self._get_bill_info_single(bill_url, bill_id, title)
-            except Exception as e:
-                if attempt == retry_attempts - 1:
-                    self.logger.error(f"의안 정보 추출 최종 실패 {bill_id}: {e}")
-                    return DocumentInfo(
-                        bill_id=bill_id,
-                        title=title,
-                        status="failed",
-                        error_msg=str(e),
-                    )
-                await asyncio.sleep(2 ** attempt)
-
-    async def _get_bill_info_single(self, bill_url: str, bill_id: str, title: str) -> DocumentInfo:
+    async def _get_bill_info_single(self, bill_id: str, title: str) -> DocumentInfo:
         """단일 의안 정보 추출"""
+        url = self.base_url + bill_id
         bill_info = DocumentInfo(bill_id=bill_id, title=title, status="processing")
-
-        async with self.session.get(bill_url) as response:
-            response.raise_for_status()
-            html_content = await response.text()
+        res = await self.http_client.make_request(url, parse_type="text")
+        html_content = res.get('raw_text')
 
         bill_info.bill_links, bill_info.conf_links = self._extract_pdf_links(html_content)
         bill_info.status = "completed"

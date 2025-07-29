@@ -8,8 +8,8 @@ from ..pipeline.base_components import BasePipelineImpl
 from ..pipeline.protocols import ExtractorProtocol, ProcessorProtocol, SaverProtocol
 
 # Import necessary components
-from .doc_downloader import DocumentExtractor
-from .doc_parser import DocumentParser
+from .document_extractor import DocumentExtractor
+from .document_parser import DocumentParser
 from .pdf_processor import PDFProcessor
 
 
@@ -17,7 +17,7 @@ class DocumentPipeline(BasePipelineImpl):
     def __init__(self, config: any):
         super().__init__(config, "DocumentPipeline")
         self.extractor: ExtractorProtocol = DocumentExtractor()
-        self.pdf_processor: ProcessorProtocol = PDFProcessor()
+        self.processor: ProcessorProtocol = PDFProcessor()
 
     async def _execute_pipeline(self, task_id: int, **kwargs) -> dict[str, any]:
         """Execute the document processing pipeline"""
@@ -32,7 +32,7 @@ class DocumentPipeline(BasePipelineImpl):
 
         await self.stage_processor.execute_stage(
             "PDF Processing",
-            self.pdf_processor.process,
+            self.processor.process,
             self.config.document_pdf
         )
 

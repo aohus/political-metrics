@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -24,12 +25,14 @@ class FileDownloader:
     def __init__(
         self,
         info_extractor: InfoExtractorProtocol = None, 
-        max_concurrent_downloads: int = 10,
+        max_concurrent_downloads: int = 100,
         retry_attempts: int = 3,
         delay_between_requests: float = 0.5,
+        batch_size: int = 100,
     ):
         self.info_extractor = info_extractor
         self.http_client = HTTPClient(max_concurrent_downloads, retry_attempts, delay_between_requests)
+        self.batch_size = batch_size
         self.stats = DownloadStats()
         self.all_results: list[DownloadResult] = []
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -48,9 +51,8 @@ class FileDownloader:
         await self.http_client.close_session()
 
     async def download_file(self, item: DownloadItem, output_dir: str) -> DownloadResult:
-        """단일 파일 다운로드 (재시도 포함)"""
+        """단일 파일 다운로드"""
         file_path = Path(output_dir) / item.filename
-
         if file_path.exists() and file_path.stat().st_size > 1024:
             self.logger.info(f"파일 존재로 건너뜀: {item.filename}")
             return DownloadResult(
@@ -60,28 +62,22 @@ class FileDownloader:
                 file_size=file_path.stat().st_size
             )
 
-        for attempt in range(self.retry_attempts):
-            try:
-                result = await self._download_single_file(item, file_path)
-                self.logger.info(f"다운로드 완료: {item.filename}")
-                return result
-            except Exception as e:
-                if attempt == self.retry_attempts - 1:
-                    self.logger.error(f"다운로드 최종 실패 {item.filename}: {e}")
-                    return DownloadResult(
-                        item=item,
-                        success=False,
-                        error_msg=str(e)
-                    )
-                await asyncio.sleep(1 * (attempt + 1))
+        try:
+            result = await self._download_single_file(item, file_path)
+            self.logger.info(f"다운로드 완료: {item.filename}")
+            return result
+        except Exception as e:
+            self.logger.error(f"pid: {os.getpid()}, 다운로드 최종 실패 {item.filename}: {e}")
+            return DownloadResult(
+                item=item,
+                success=False,
+                error_msg=str(e)
+            )
 
     async def _download_single_file(self, item: DownloadItem, file_path: Path) -> DownloadResult:
         """실제 파일 다운로드 수행"""
         file_path.parent.mkdir(parents=True, exist_ok=True)
-
         async with self.http_client.session.get(item.url) as response:
-            response.raise_for_status()
-
             async with aiofiles.open(file_path, "wb") as f:
                 async for chunk in response.content.iter_chunked(8192):
                     await f.write(chunk)
@@ -95,15 +91,7 @@ class FileDownloader:
         )
 
     async def download_batch(self, items: list[DownloadItem], output_dir: str) -> list[DownloadResult]:
-        """배치 단위 파일 다운로드"""
-        semaphore = asyncio.Semaphore(self.max_concurrent_downloads)
-
-        async def download_with_semaphore(item: DownloadItem):
-            async with semaphore:
-                await asyncio.sleep(self.delay_between_requests)
-                return await self.download_file(item, output_dir)
-
-        tasks = [download_with_semaphore(item) for item in items]
+        tasks = [self.download_file(item, output_dir) for item in items]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         final_results = []
@@ -206,7 +194,7 @@ class FileDownloader:
             ]
         }
 
-        summary_file = Path(output_dir) / "download_summary.json"
+        summary_file = Path(output_dir) / f"download_summary_{datetime.now().strftime('%Y-%m-%d')}_{os.get_pid()}.json"
 
         async with aiofiles.open(summary_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(summary, ensure_ascii=False, indent=2))

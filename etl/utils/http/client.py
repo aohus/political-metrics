@@ -31,6 +31,8 @@ class ResponseParser:
                 return "json"
             elif "xml" in content_type.lower():
                 return "xml"
+            elif "text" in content_type.lower():
+                return "text"
 
         # 내용으로 판단
         if text_stripped.startswith(("<?xml", "<")):
@@ -51,7 +53,7 @@ class ResponseParser:
                 logger.debug("JSON 형식으로 파싱 성공")
                 return result
             except json.JSONDecodeError as e:
-                logger.warning(f"JSON 파싱 실패, XML 시도: {e}")
+                # logger.warning(f"JSON 파싱 실패, XML 시도: {e}")
                 # JSON 파싱 실패 시 XML 시도
                 format_type = "xml"
 
@@ -61,20 +63,15 @@ class ResponseParser:
                 logger.debug("XML 형식으로 파싱 성공")
                 return result
             except Exception as e:
-                logger.warning(f"XML 파싱 실패, JSON 시도: {e}")
-                # XML 파싱 실패 시 JSON 시도
                 try:
                     result = json.loads(text)
                     logger.debug("JSON 형식으로 재파싱 성공")
                     return result
                 except json.JSONDecodeError:
-                    logger.error("JSON, XML 모든 파싱 방법 실패")
-                    return None
-
-        # 둘 다 아닌 경우 텍스트로 반환
-        logger.warning(f"알 수 없는 응답 형식: {format_type}")
-        return {"raw_text": text}
-
+                    format_type = "xml"
+                
+        if format_type == "text":
+            return {"raw_text": text}
 
 class HTTPClient:
     """HTTP 요청 전용 클래스"""
@@ -107,12 +104,12 @@ class HTTPClient:
         if self.session is None or self.session.closed:
             connector = aiohttp.TCPConnector(
                 ssl=False,
-                limit=100,
-                limit_per_host=30,
+                limit=200,
+                limit_per_host=100,
                 keepalive_timeout=60,
                 enable_cleanup_closed=True,
             )
-            timeout = aiohttp.ClientTimeout(total=60, connect=30)
+            timeout = aiohttp.ClientTimeout(total=60, connect=100)
             self.session = aiohttp.ClientSession(connector=connector, timeout=timeout)
             logger.info("HTTP 세션 생성됨")
 
@@ -129,7 +126,7 @@ class HTTPClient:
         if self.session is None or self.session.closed:
             await self.create_session()
 
-    async def make_request(self, url: str, params: Dict = None) -> Optional[Dict]:
+    async def make_request(self, url: str, params: Dict = None, parse_type: str = None) -> Optional[Dict]:
         """API 요청 실행 (비동기)"""
         await self.ensure_session()  # 세션 확인
 
@@ -149,18 +146,14 @@ class HTTPClient:
 
                     async with self.session.get(url, params=params, headers=headers, ssl=False) as response:
                         if response.status == 200:
-                            text = await response.text(encoding="utf-8")
-                            content_type = response.headers.get("Content-Type", "")
-
-                            # 응답 형식 로깅
-                            format_detected = ResponseParser.detect_format(text, content_type)
-                            logger.debug(f"응답 형식: {format_detected}, Content-Type: {content_type}")
-
-                            # 응답 파싱
-                            result = self.parser.parse_response(text, content_type)
-                            if result is None:
-                                logger.error(f"파싱 실패. 응답 내용 일부: {text[:200]}...")
-                            return result
+                            if parse_type:
+                                text = await response.text(encoding="utf-8")
+                                result = self.parser.parse_response(text, parse_type)
+                            
+                                if result is None:
+                                    logger.error(f"파싱 실패. 응답 내용 일부: {text[:200]}...")
+                                return result
+                            return response
                         else:
                             logger.warning(f"HTTP 오류: {response.status} - {response.reason}")
                             if attempt < max_retries - 1:

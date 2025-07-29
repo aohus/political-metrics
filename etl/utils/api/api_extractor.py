@@ -54,7 +54,7 @@ class APIExtractor:
                 self.api_client.PAGE_SIZE_PARAM: 1,
             }
         )
-        result = await self.http_client.make_request(url, params)
+        result = await self.http_client.make_request(url, params, parse_type="json")
         if result:
             return self.api_client.extract_total_count(api_name, result)
         return 0
@@ -68,7 +68,7 @@ class APIExtractor:
                 self.api_client.PAGE_SIZE_PARAM: page_size,
             }
         )
-        result = await self.http_client.make_request(url, params)
+        result = await self.http_client.make_request(url, params, parse_type="json")
         return result
 
     async def _get_request_var(self, api_name: str, **kwargs) -> tuple:

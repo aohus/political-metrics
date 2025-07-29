@@ -2,9 +2,9 @@
 비동기 PDF 텍스트 추출기
 여러 PDF 라이브러리를 사용한 고성능 비동기 텍스트 추출
 """
-
 import asyncio
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -482,9 +482,10 @@ class PDFMultiExtractor:
             }
 
     async def extract_multiple_files(
-        self, file_paths: List[str], method: str = "best", batch_size: int = 10
+        self, dir_path: List[str], method: str = "best", batch_size: int = 10
     ) -> List[Dict[str, Any]]:
         """여러 PDF 파일을 배치 단위로 처리"""
+        file_paths = [os.path.join(dir_path, fname) for fname in os.listdir(dir_path)]
         results = []
 
         for i in range(0, len(file_paths), batch_size):

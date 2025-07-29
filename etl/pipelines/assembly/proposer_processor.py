@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import Optional
 
 from exceptions.exceptions import DataValidationError
@@ -66,7 +67,7 @@ class BillProposerProcessor:
     
     async def save(self, data: list[dict]) -> None:
         try:
-            await write_file(self.output_dir / "proposer_bill.json", data),
+            await write_file(self.output_dir / f"proposer_bill_{datetime.now().strftime('%Y-%m-%d')}.json", data),
         except Exception as e:
             logger.error(f"Failed to save bill processors: {e}", exc_info=True)
 

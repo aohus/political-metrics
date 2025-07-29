@@ -3,14 +3,12 @@ import logging
 import multiprocessing as mp
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
 from configs import Config
-from utils.file.fileio import read_file, write_file
 
 
 class PipelineStatus(Enum):
@@ -42,7 +40,7 @@ class PipelineConfig:
     class_name: str
     init_args: dict[str, Any]
     timeout: float = 300.0
-    
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -126,6 +124,7 @@ class PipelineExecutor:
         module_path: str,
         class_name: str,
         init_args: Optional[dict[str, Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
         timeout: float = 300.0
     ) -> None:
         """
@@ -143,6 +142,7 @@ class PipelineExecutor:
             module_path=module_path,
             class_name=class_name,
             init_args=init_args or {},
+            kwargs=kwargs or {},
             timeout=timeout
         )
         self._pipeline_configs[name] = pl_config
@@ -187,13 +187,12 @@ class PipelineExecutor:
                     ): i
                     for i in range(max_workers)
                 }
-                
+
                 for future in asyncio.as_completed(future_to_task.keys(), timeout=timeout):
                     try:
                         result_dict = await future
                         result = PipelineResult(**result_dict)
                         results.append(result)
-                            
                     except asyncio.TimeoutError:
                         task_id = future_to_task[future]
                         result = PipelineResult(
@@ -202,7 +201,6 @@ class PipelineExecutor:
                             error="Task execution timed out"
                         )
                         results.append(result)
-                        
                     except Exception as e:
                         task_id = future_to_task[future]
                         result = PipelineResult(
@@ -211,19 +209,19 @@ class PipelineExecutor:
                             error=f"Unexpected error: {str(e)}"
                         )
                         results.append(result)
-                
+
         except Exception as e:
             self.logger.error(f"Batch execution failed: {str(e)}")
             raise
-        
+
         total_time = time.time() - start_time
         results.sort(key=lambda x: x.task_id)
-        
+
         # 실행 통계 로깅
         success_count = sum(1 for r in results if r.status == PipelineStatus.SUCCESS)
         failed_count = sum(1 for r in results if r.status == PipelineStatus.FAILED)
         timeout_count = sum(1 for r in results if r.status == PipelineStatus.TIMEOUT)
-        
+
         self.logger.info(
             f"Batch execution completed: {pipeline_name}, "
             f"total_time: {total_time:.2f}s, "
@@ -239,32 +237,32 @@ class PipelineExecutor:
     ) -> PipelineResult:
         """
         단일 파이프라인을 현재 프로세스에서 실행합니다.
-        
+
         Args:
             pipeline_name: 실행할 파이프라인 이름
             timeout: 실행 타임아웃 (기본값: 파이프라인 설정의 타임아웃)
             **kwargs: 파이프라인에 전달할 추가 매개변수
-            
+
         Returns:
             PipelineResult: 실행 결과
         """
         if pipeline_name not in self._pipeline_configs:
             raise ValueError(f"Unknown pipeline: {pipeline_name}")
-        
+
         pl_config = self._pipeline_configs[pipeline_name]
         timeout = timeout or pl_config.timeout
-        
+
         self.logger.info(f"Starting single pipeline execution: {pipeline_name}")
-        
+
         start_time = time.time()
-        
+
         try:
             import importlib
             module = importlib.import_module(pl_config.module_path)
             pipeline_class = getattr(module, pl_config.class_name)
-            
+
             pipeline = pipeline_class(**pl_config.init_args)
-            
+
             if hasattr(pipeline, 'run'):
                 result_data = await asyncio.wait_for(
                     pipeline.run(**kwargs),
@@ -272,21 +270,19 @@ class PipelineExecutor:
                 )
             else:
                 raise AttributeError(f"Pipeline {pipeline_name} has no run method")
-            
+
             execution_time = time.time() - start_time
-            
+
             self.logger.info(
                 f"Single pipeline execution completed: {pipeline_name} "
                 f"in {execution_time:.2f}s"
             )
-            
             return PipelineResult(
                 task_id=0,
                 status=PipelineStatus.SUCCESS,
                 data=result_data,
                 execution_time=execution_time
             )
-            
         except asyncio.TimeoutError:
             execution_time = time.time() - start_time
             self.logger.warning(
@@ -299,7 +295,6 @@ class PipelineExecutor:
                 execution_time=execution_time,
                 error=f"Pipeline execution timed out after {timeout}s"
             )
-            
         except Exception as e:
             execution_time = time.time() - start_time
             error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
@@ -314,80 +309,28 @@ class PipelineExecutor:
                 error=error_msg,
                 execution_time=execution_time
             )
-    
+
     async def run_all_pipelines(self) -> dict[str, Any]:
-        """Run all pipelines in sequence"""
         results = {}
         logging.info(f"Run Pipelines: {", ".join(self.get_pipeline_names())}")
 
-        # Run assembly pipeline
-        assembly_result = await self.run_single_pipeline(
-            "assembly",
-            request_apis={
-                "law_bill_member": {"AGE": "21"}, 
-                "law_bill_gov": {"AGE": "21"}, 
-                "law_bill_cap": {"AGE": "21"},
-            }
-        )
-        if assembly_result.status == PipelineStatus.FAILED:
-            raise
-        results["assembly"] = assembly_result
-
-        # Process new bills
-        new_bills, chunks = await self._process_new_bills()
-        results["new_bills_count"] = len(new_bills) if new_bills else 0
-
-        # Run document pipeline
-        document_result = await self.run_multi_pipeline("document", max_workers=chunks)
-        results["document"] = document_result
+        pipelines = self.get_pipeline_configs()
+        for name, config in pipelines.items():
+            self.logger.info(f"Pipeline: {name} start to run")
+            func = config.get("run_func")
+            results[name] = await func(name, config.get("kwargs"))
 
         results["status"] = "all_completed"
         self.logger.info("All pipelines completed successfully")
         return results
 
-    async def _process_new_bills(self) -> Optional[list[tuple]]:
-        """Identify and save new bills"""
-        try:
-            new_bills_path = self.config.assembly_temp_formatted / f"bills_{datetime.now().strftime('%Y-%m-%d')}.json"
-            old_bills_path = self.config.assembly_formatted / "bills.json"
-            
-            # Read both files
-            new_bills, old_bills = await asyncio.gather(
-                read_file(new_bills_path),
-                read_file(old_bills_path)
-            )
-            
-            # Find new bills
-            old_bill_no = {bill["BILL_NO"] for bill in old_bills}
-            new_bills_list = [
-                (bill["BILL_ID"], f"{bill['BILL_NO']}_{bill['BILL_NAME']}")
-                for bill in new_bills
-                if bill["BILL_NO"] not in old_bill_no
-            ]
-            
-            # Save new bills in chunks
-            if new_bills_list:
-                new_bill_cnt = len(new_bills_list)
-                chunk_size = new_bill_cnt // 4 + 1 if new_bill_cnt > 12000 else 3000
+    def get_pipeline_configs(self) -> list[dict]:
+        return self._pipeline_configs
 
-                chunks = [new_bills_list[i:i + chunk_size] for i in range(0, new_bill_cnt, chunk_size)]
-                for i, chunk in enumerate(chunks):
-                    date_str = datetime.now().strftime("%Y-%m-%d")
-                    output_path = self.config.assembly_ref / f"new_bill_{date_str}_{i}.json"
-                    await write_file(output_path, chunk)
-                self.logger.info(f"Found {len(new_bills_list)} new bills")
-            return new_bills_list, len(chunks)
-            
-        except Exception as e:
-            self.logger.error(f"Failed to process new bills: {e}")
-            return None
-    
     def get_pipeline_names(self) -> list[str]:
-        """등록된 파이프라인 이름 목록을 반환합니다."""
         return list(self._pipeline_configs.keys())
-    
+
     def get_pipeline_config(self, name: str) -> Optional[PipelineConfig]:
-        """파이프라인 설정을 반환합니다."""
         return self._pipeline_configs.get(name)
 
 
@@ -396,20 +339,27 @@ async def main():
     config.create_directories()
 
     executor = PipelineExecutor(config)
-
     executor.register_pipeline(
         name="assembly",
         module_path="pipelines.assembly.pipeline",
         class_name="AssemblyPipeline",
+        run_func=executor.run_single_pipeline,
         init_args={"config": config},
+        kwargs={"request_apis": {
+            "law_bill_member": {"AGE": "21"}, 
+            "law_bill_gov": {"AGE": "21"}, 
+            "law_bill_cap": {"AGE": "21"},
+        }},
         timeout=None
     )
 
     executor.register_pipeline(
         name="document",
-        module_path="pipelines.document.pipeline",  
+        module_path="pipelines.document.pipeline", 
         class_name="DocumentPipeline",
+        run_func=executor.run_multi_pipeline,
         init_args={"config": config},
+        kwargs={"max_workers": 4},
         timeout=None
     )
     

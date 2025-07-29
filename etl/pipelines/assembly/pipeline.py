@@ -4,6 +4,7 @@ from ..pipeline.protocols import ExtractorProtocol, ProcessorProtocol, SaverProt
 # Import necessary components
 from .assembly_extractor import AssemblyExtractor
 from .bill_processor import BillProcessor
+from .new_bill_processor import write_new_bills
 from .proposer_processor import BillProposerProcessor
 
 
@@ -17,29 +18,30 @@ class AssemblyPipeline(BasePipelineImpl):
             BillProcessor(config),
             BillProposerProcessor(config)
         ]
+        self.write_new_bills = write_new_bills
 
     async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
         """Execute the assembly data pipeline"""
-        # extract_results = await self.stage_processor.execute_stage(
-        #     "Data Extraction", 
-        #     self.extractor.extract,
-        #     request_apis,
-        #     self.config.assembly_temp_raw
-        # )
-        extract_results = [
-            ("law_bill_member", "/Users/aohus/Workspaces/github/politics/etl/data/assembly/temp/raw/law_bill_member_2025-07-18.json"), 
-            ("law_bill_gov", "/Users/aohus/Workspaces/github/politics/etl/data/assembly/temp/raw/law_bill_gov_2025-07-18.json"), 
-            ("law_bill_cap", "/Users/aohus/Workspaces/github/politics/etl/data/assembly/temp/raw/law_bill_cap_2025-07-18.json"),
-        ]
-        
+        extract_results = await self.stage_processor.execute_stage(
+            "Data Extraction", 
+            self.extractor.extract,
+            request_apis,
+            self.config.assembly_temp_raw
+        )
+
         processed_results = await self.stage_processor.execute_processors(
             self.processors,
             extract_results,
         )
 
+        new_bill_results = await self.stage_processor.execute_stage(
+            "Write New Bills", 
+            self.write_new_bills,
+        )
         return {
             "extract_results": extract_results,
             "process_results": processed_results,
+            "new_bill_chunks": new_bill_results,
             "status": "completed"
         }
 

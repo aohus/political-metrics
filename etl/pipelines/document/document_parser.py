@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class LegalDocumentInfo:
+class DocumentInfo:
     """법률안 문서 정보를 담는 데이터 클래스"""
     title: str = ""
     bill_number: str = ""
@@ -99,7 +99,7 @@ class DocumentParser:
             },
         }
 
-    async def parse(self, text_dir: str, batch_size=20, **kwargs) -> List[LegalDocumentInfo]:
+    async def parse(self, text_dir: str, batch_size=20, **kwargs) -> list[DocumentInfo]:
         """디렉토리 내 모든 파일에서 법률안 정보 추출"""
         if len(text_dir) > batch_size:
             results = await self.extract_multiple_files_batched(text_dir, batch_size)
@@ -107,9 +107,9 @@ class DocumentParser:
             results = await self.extract_multiple_files(text_dir)
         return results
 
-    def parse_info(self, text: str, title: str) -> LegalDocumentInfo:
+    def parse_info(self, text: str, title: str) -> DocumentInfo:
         """텍스트에서 법률안 정보 추출 (동기 처리 - 정규식 처리는 빠름)"""
-        info = LegalDocumentInfo(full_text=text, title=title)
+        info = DocumentInfo(full_text=text, title=title)
         info.bill_number = title.split("_")[0]
 
         proposal_date_match = self.patterns["proposal_date"].search(text)
@@ -185,7 +185,7 @@ class DocumentParser:
             table_text = text[table_start_pos:]
         return table_text
 
-    async def extract_from_file(self, file_path: Union[str, Path]) -> LegalDocumentInfo:
+    async def extract_from_file(self, file_path: Union[str, Path]) -> DocumentInfo:
         async with self.semaphore:
             try:
                 title = file_path.split("/")[-1].split(".")[0]
@@ -196,7 +196,7 @@ class DocumentParser:
 
     async def extract_multiple_files(
         self, file_paths: List[Union[str, Path]]
-    ) -> List[LegalDocumentInfo]:
+    ) -> list[DocumentInfo]:
         """비동기 여러 파일에서 정보 추출"""
         tasks = [self.extract_from_file(file_path) for file_path in file_paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -212,7 +212,7 @@ class DocumentParser:
 
     async def extract_multiple_files_batched(
         self, dir_path: str, batch_size: int = 50
-    ) -> List[LegalDocumentInfo]:
+    ) -> list[DocumentInfo]:
         """배치 단위로 여러 파일에서 정보 추출 (대용량 처리용)"""
         save_tasks = []
         file_paths = [os.path.join(dir_path, fname) for fname in os.listdir(dir_path)]
@@ -247,18 +247,18 @@ class DocumentParser:
             )
 
 
-async def parse_doc(file_path: str) -> LegalDocumentInfo:
+async def parse_doc(file_path: str) -> DocumentInfo:
     """비동기 단일 파일에서 법률안 정보 추출"""
-    parser = BillParser()
+    parser = DocumentParser()
     info = await parser.extract_from_file(file_path)
     return info
 
 
 async def parse_multiple_docs(
     file_paths: List[str], data_saver, max_concurrent: int = 10, batch_size: int = 50
-) -> List[LegalDocumentInfo]:
+) -> list[DocumentInfo]:
     """비동기 여러 파일에서 법률안 정보 추출"""
-    parser = BillParser(data_saver=data_saver, max_concurrent=max_concurrent)
+    parser = DocumentParser(data_saver=data_saver, max_concurrent=max_concurrent)
 
     if len(file_paths) > batch_size:
         results = await parser.extract_multiple_files_batched(file_paths, batch_size)
