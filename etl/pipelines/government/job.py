@@ -1,103 +1,129 @@
+# from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Protocol, Tuple, Type
+from typing import TYPE_CHECKING, Any, Optional, Type
+
+from datatype import (
+    Background,
+    Effect,
+    Etc,
+    FinanceBusiness,
+    Goal,
+    RiskManagePlan,
+    SubTask,
+    Target,
+    Task,
+)
+
+from .jobs import (
+    BaseParser,
+    BaseProcessor,
+    FinanceBusinessParser,
+    FinanceBusinessProcessor,
+    GoalParser,
+    GoalProcessor,
+    SubTaskNestedSectionParser,
+    SubTaskSectionProcessor,
+    TaskParser,
+    TaskProcessor,
+)
 
 logger = logging.getLogger(__name__)
 
-
-class ProcessorProtocol(Protocol):
-    def process(self, data: Any) -> Any: ...
-
-
-class ParserProtocol(Protocol):
-    def create_lines(self, content: str) -> Any: ...
-    def parse_lines(self, lines: list) -> Any: ...
-
-
-class DataClassProtocol(Protocol):
-    pass
-
-
-class Linker:
-    goal: str
-    task: str = None
+if TYPE_CHECKING:
+    from .jobs import DataClassProtocol, ParserProtocol, ProcessorProtocol
+    from .manager import Manager
+    from .writer import Writer
 
 
 class Job:
-    mamanger: Manager
-    linker: Linker
-    processor: Processor
-    content: str
+    def __init__(self, manager, processor, writer, data_class, content):
+        self.manager: Manager = manager
+        self.processor: ProcessorProtocol = processor
+        self.writer: Writer = writer
+        self.data_class: dataclass = data_class
+        self.content: str = content
 
-    def process(self):
-        self.processor.parse(self.content)
+    async def process(self):
+        self.processor.process(self)
 
 
 class JobType(Enum):
     GOAL = "goal"
     RISK = "risk" 
-    ETC = "etc"  # 'etc' 대신 명확한 이름 사용
+    ETC = "etc"
     TASK = "task"
     FINANCE = "finance"
     SUBTASKS = "subtasks"
+    TARGET = "target"
     GENERAL = "general"
 
 
 @dataclass(frozen=True)  
 class JobConfig:
-    """Job 생성을 위한 설정 정보"""
     parser_class: Type[ParserProtocol]
     processor_class: Type[ProcessorProtocol]
     data_class: Type[DataClassProtocol]
-    
+
     def __post_init__(self):
-        """설정 유효성 검증"""
         if not all([self.parser_class, self.processor_class, self.data_class]):
             raise ValueError("All configuration classes must be provided")
 
 
 class JobConfigRegistry:
-    """Job 설정을 관리하는 레지스트리"""
-    
     def __init__(self):
-        self._configs: Dict[JobType, JobConfig] = {}
+        self._configs: dict[JobType, JobConfig] = {}
         self._setup_default_configs()
     
     def _setup_default_configs(self):
-        """기본 설정들을 등록"""
         default_configs = {
             JobType.GOAL: JobConfig(
-                parser_class=GoalParser,
                 processor_class=GoalProcessor, 
+                parser_class=GoalParser,
                 data_class=Goal
             ),
             JobType.RISK: JobConfig(
-                parser_class=RiskManageParser,
-                processor_class=RiskManageProcessor,  # 수정: 괄호 제거
-                data_class=RiskManage
+                processor_class=BaseProcessor, 
+                parser_class=BaseParser,
+                data_class=RiskManagePlan
+            ),
+            JobType.ETC: JobConfig(
+                processor_class=BaseProcessor, 
+                parser_class=BaseParser,
+                data_class=Etc
             ),
             JobType.TASK: JobConfig(
-                parser_class=TaskParser,
                 processor_class=TaskProcessor,
+                parser_class=TaskParser,
                 data_class=Task
             ),
             JobType.FINANCE: JobConfig(
-                parser_class=FinanceSectionParser,
-                processor_class=FinanceSectionProcessor,
-                data_class=FinanceSection
+                processor_class=FinanceBusinessProcessor,
+                parser_class=FinanceBusinessParser,
+                data_class=FinanceBusiness
             ),
             JobType.SUBTASKS: JobConfig(
-                parser_class=SubTaskNestedSectionParser,
                 processor_class=SubTaskSectionProcessor,
-                data_class=SubTaskSection
+                parser_class=SubTaskNestedSectionParser,
+                data_class=SubTask
             ),
-            JobType.SECTION: JobConfig(  # 'etc' 중복 해결
-                parser_class=SectionParser,
-                processor_class=SectionProcessor,
-                data_class=SectionData
+            JobType.TARGET: JobConfig( 
+                processor_class=BaseProcessor,
+                parser_class=BaseParser,
+                data_class=Target
+            ),
+            JobType.BACKGROUND: JobConfig( 
+                processor_class=BaseProcessor,
+                parser_class=BaseParser,
+                data_class=Background
+            ),
+            JobType.EFFECT: JobConfig( 
+                processor_class=BaseProcessor,
+                parser_class=BaseParser,
+                data_class=Effect
             )
         }
         
@@ -120,57 +146,63 @@ class JobConfigRegistry:
 
 class AbstractJobFactory(ABC):
     @abstractmethod
-    def create_job(self, manager: Any, job_type: JobType, 
-                   content: str, linker: Any) -> 'Job':
+    async def create_job(self, manager: Any, job_type: JobType, content: str, linker: Any) -> 'Job':
         pass
-    
+
     @abstractmethod
-    def get_supported_types(self) -> list[JobType]:
-        """지원되는 타입 목록"""
+    async def get_supported_types(self) -> list[JobType]:
         pass
+
+
+class CacheObj:
+    def __init__(self):
+        self._parser_cache: dict[JobType, ParserProtocol] = {}
+        self._processor_cache: dict[JobType, ProcessorProtocol] = {}
+        self._writers_cache: dict[JobType, Writer] = {}
 
 
 class JobFactory(AbstractJobFactory):
-    def __init__(self, config_registry: Optional[JobConfigRegistry] = None):
+    def __init__(self, cache_obj: CacheObj, create_writer, config_registry: Optional[JobConfigRegistry] = None):
         self._config_registry = config_registry or JobConfigRegistry()
-        self._parser_cache: Dict[JobType, ParserProtocol] = {}
-        self._processor_cache: Dict[JobType, ProcessorProtocol] = {}
+        self._parser_cache = cache_obj._parser_cache
+        self._processor_cache = cache_obj._processor_cache
+        self._writer_cache = cache_obj._writer_cache
+        self.create_writer = create_writer
     
-    def _get_or_create_processor(self, job_type: JobType) -> ProcessorProtocol:
-        if job_type not in self._processor_cache:
-            config = self._config_registry.get_config(job_type)
-            if not config:
-                raise ValueError(f"Unsupported job type: {job_type.value}")
+    async def _get_config(self, job_type: JobType) -> bool:
+        config = self._config_registry.get_config(job_type)
+        if not config:
+            raise ValueError(f"Unsupported job type: {job_type.value}")
+        return config
             
-            try:
-                processor = config.processor_class(config.data_class)
-                self._processor_cache[job_type] = processor
-                logger.debug(f"Created processor for {job_type.value}")
-            except Exception as e:
-                logger.error(f"Failed to create processor for {job_type.value}: {e}")
-                raise
-        
-        return self._processor_cache[job_type]
-    
-    def _get_or_create_parser(self, job_type: JobType) -> ParserProtocol:
+    async def _get_or_create_parser(self, config, job_type: JobType) -> ParserProtocol:
         if job_type not in self._parser_cache:
-            config = self._config_registry.get_config(job_type)
-            if not config:
-                raise ValueError(f"Unsupported job type: {job_type.value}")
-            
             try:
-                processor = self._get_or_create_processor(job_type)
-                parser = config.parser_class(processor)
+                parser = config.parser_class()
                 self._parser_cache[job_type] = parser
                 logger.debug(f"Created parser for {job_type.value}")
             except Exception as e:
                 logger.error(f"Failed to create parser for {job_type.value}: {e}")
                 raise
-        
         return self._parser_cache[job_type]
     
-    def create_job(self, manager: Any, job_type: JobType, 
-                   content: str, linker: Any) -> 'Job':
+    async def _get_or_create_processor(self, config, job_type: JobType) -> ProcessorProtocol:
+        if job_type not in self._processor_cache:
+            try:
+                parser = self._get_or_create_parser(job_type)
+                writer = self.create_writer(job_type, config.data_class.header)
+                processor = config.processor_class(parser, writer)
+                self._processor_cache[job_type] = processor
+                logger.debug(f"Created processor for {job_type.value}")
+            except Exception as e:
+                logger.error(f"Failed to create processor for {job_type.value}: {e}")
+                raise
+        return self._processor_cache[job_type]
+    
+    async def _get_data_class(self, config, job_type: JobType) -> ProcessorProtocol:
+        return config.data_class
+    
+    async def create_job(self, manager: Any, job_type: JobType, content: str, fk: Any) -> 'Job':
         """
         Job을 생성하고 반환
         
@@ -188,19 +220,20 @@ class JobFactory(AbstractJobFactory):
             RuntimeError: Job 생성 실패
         """
         try:
-            # JobType이 문자열로 전달된 경우 변환
             if isinstance(job_type, str):
                 job_type = JobType(job_type)
-            
-            parser = self._get_or_create_parser(job_type)
+            config = self._get_config(job_type)            
+
+            processor = self._get_or_create_processor(config, job_type)
+            data_class = self._get_data_class(config, job_type)
             
             job = Job(
                 manager=manager,
-                parser=parser, 
                 content=content,
-                linker=linker
+                processor=processor,
+                data_class=data_class,
+                fk=fk
             )
-            
             logger.info(f"Successfully created job of type: {job_type.value}")
             return job
             
@@ -211,15 +244,15 @@ class JobFactory(AbstractJobFactory):
             logger.error(f"Failed to create job: {e}")
             raise RuntimeError(f"Job creation failed: {e}") from e
     
-    def get_supported_types(self) -> list[JobType]:
+    async def get_supported_types(self) -> list[JobType]:
         return self._config_registry.get_supported_types()
     
-    def register_job_type(self, job_type: JobType, config: JobConfig):
+    async def register_job_type(self, job_type: JobType, config: JobConfig):
         self._config_registry.register(job_type, config)
         self._parser_cache.pop(job_type, None)
         self._processor_cache.pop(job_type, None)
     
-    def clear_cache(self):
+    async def clear_cache(self):
         self._parser_cache.clear()
         self._processor_cache.clear()
         logger.info("Factory cache cleared")
@@ -229,12 +262,12 @@ class SingletonJobFactory(JobFactory):
     _instance: Optional['SingletonJobFactory'] = None
     _initialized: bool = False
 
-    def __new__(cls, *args, **kwargs):
+    async def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, config_registry: Optional[JobConfigRegistry] = None):
+    async def __init__(self, config_registry: Optional[JobConfigRegistry] = None):
         if not self._initialized:
             super().__init__(config_registry)
             self._initialized = True

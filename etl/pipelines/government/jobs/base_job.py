@@ -1,70 +1,91 @@
+import asyncio
 import copy
 import logging
 import re
-from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Dict, Optional, Protocol, Tuple, Type
 
-# 로깅 설정
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class Result:
-    status: int
-    data: dict
-    total: int
-    success: int
-    error_msg: str
+class ProcessorProtocol(Protocol):
+    async def process(self, data: Any) -> Any: ...
+    
+    async def process_lines(self, data: Any) -> Any: ...
+    
+    async def update_data(self, data: Any) -> Any: ...
+    
+    async def create_data(self, data: Any) -> Any: ...
+
+
+class ParserProtocol(Protocol):
+    async def parse(self, lines: list) -> Any: ...
+
+
+class DataClassProtocol(Protocol):
+    def to_dict(self) -> dict: ...
 
 
 class BaseProcessor:
-    def __init__(self, parser, data_cls):
+    def __init__(self, parser, writer, *args, **kwargs):
         self.parser = parser
-        self.data_cls = data_cls
+        self.writer = writer
+        self.job_map = {}
 
-    def process(self, content):
-        self.create_lines(content)
+    async def process(self, job):
+        await self.process_lines(job)
     
-    def create_lines(self, content):
-        lines = self.parser.create_lines(content)
-        self.process_lines(lines)
+    async def process_lines(self, job):
+        for title, section_title, section_content in self.parser.parse_lines(job.content):
+            fk = await self.create_data(job.data_class, title)
+            await self.request_job(job.manager, fk, section_title, section_content)
+
+    async def create_data(self, data_class, task_title):
+        data = data_class(title=task_title)
+        return data.id
+
+    async def update_data(self, data, infos):
+        data.f = infos
     
-    def process_lines(self, lines):
-        obj = self.create_obj()
+    async def request_job(self, manager: Manager, fk, section_title, section_content):
+        if not (section_title or section_content):
+            logger.warning("section_title, section_content is Required")
+        
+        if job_type := self.get_job_type(section_title):
+            asyncio.create_task(manager.add(job_type, section_content, fk))
 
-        for data in self.parser.parse_lines(lines):
-            self.insert(obj, *data)
-    
-    def insert(self, obj=None, *data):
-        pass
-
-    def create_obj(self, obj=None):
-        return self.obj_cls()
-
-    def to_dict(self):
-        return {}
+    async def get_job_type(self, section_title: str):
+        return self.job_map.get(section_title)
 
 
 class BaseParser:
     def __init__(self):
-        self.compiler = re.compile()
+        self.compiler = re.compile(r'([ㅇ◦]\s*.+?)(?=ㅇ|◦|$)', re.DOTALL | re.IGNORECASE)
 
-    def create_lines(self, section: str):
-        return self._create_lines(section)
+    async def create_lines(self, section: str):
+        return await self._create_lines(section)
 
-    def _create_lines(self, section: str):
+    async def _create_lines(self, section: str):
         return section.split("\n")
-
-    def parse_lines(self, lines):
+    
+    async def parse_lines(self, lines: list):
         for line in lines:
-            self._parse_lines(line)
+            return await self._parse_lines(line)
 
-    def _parse_lines(self, line: str) -> iter:
+    async def _parse_lines(self, line: str) -> iter:
         return self.compiler.finditer(line)
+    
+    async def parse(self, content) -> iter:
+        for matches in self.compiler.finditer(content):
+            yield matches
+
+    async def parse_with_line(self, content) -> iter:
+        lines = self.create_lines(content)
+        for line in lines:
+            for matches in self.compiler.finditer(line):
+                yield matches
 
 
-class BaseNestedParser:
+class NestedParser:
     def __init__(self):
         self.infos = []
         self.lines = []
@@ -92,14 +113,17 @@ class BaseNestedParser:
     def _line_validation(self, line):
         return len(line) > 0
     
-    def process_line(self):
+    def parse_lines(self):
         line = self._get_line()
         if not line:
             return "eof", {}
         return self._process_line(line)
 
-    def _process_line(self, line):
+    def _parse_lines(self, line):
         pass
+    
+    def create_lines(self, content: str):
+        return self._create_lines(content)
     
     def _create_lines(self, section: str):
         self.lines = [line for line in section.split('\n') if line]

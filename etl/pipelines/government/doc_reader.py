@@ -1,0 +1,32 @@
+import os
+from pathlib import Path
+
+
+class GoalDocReader:
+    BASE_DIR = "/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/"
+
+    async def read(self, year, ministry):
+        filename = f"{ministry}/성과목표별시행계획_{ministry}_{year}.json"    
+        with open(os.file(self.BASEDIR, filename), 'r') as f:
+            return f.read()
+
+    async def read_goal_ref():
+        pass
+        # with open(f'/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/교육부_전략_과제_{filepath}.json', 'r') as f:
+        #     yearly_tasks = json.load(f)
+
+        # goals = {}
+        # for 전략목표 in yearly_tasks:
+        #     전략목표번호 = 전략목표['전략목표'][0]
+        #     for 성과목표, 관리과제 in 전략목표['성과목표'].items():
+        #         성과목표번호 = f'{전략목표번호}-{성과목표[0]}'
+        #         성과목표전체 = f'{전략목표번호}-{성과목표}'
+        #         goals[성과목표번호] = [title for title in 관리과제['관리과제']]
+    
+    @staticmethod
+    async def result():
+        pathdir = Path('/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/tasks')
+        for fname in os.listdir(pathdir):
+            with open(f"{pathdir}/{fname}", 'r') as f:
+                data = f.read()
+                print(fname, len(data))
