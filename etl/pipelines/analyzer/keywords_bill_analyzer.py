@@ -61,7 +61,7 @@ class PoliticalBillAnalyzer:
         self.social_impact_keywords = self.keywords.social_impact_keywords
 
     def load_keywords(self) -> dict[str, any]:
-        from .keywords import KeywordDict
+        from .keywords.keywords import KeywordDict
         return KeywordDict()
 
     def classify_policy_field(self, text: str, title_text: str, reason_text: str) -> tuple[str, List[str]]:

@@ -67,21 +67,22 @@ class DocumentParser:
                 r"1\.\s*대안의\s*제안경위(.*?)(?=2\.\s*대안의\s*제안이유|$)",
                 re.DOTALL | re.IGNORECASE,
             ),
+            # 1. 대안의 제안 경위, 2. 대안의 제안이유, 3. 대안의 주요내용 / 2. 대안의 제안이유 및 주요내용
             "bill_number_int": re.compile(r"\b([1-9][0-9]{3,7})\b"),
             "bill_number_str": re.compile(r"제([1-9][0-9]{3,7})호"),
             "sections": {
                 "제안이유": re.compile(
-                    r"제안이유\s*(.*?)(?=주요내용|법률\s*제|참고사항|$)",
+                    r"(제안이유|제안이유\s*및\s*주요내용)\s*(.*?)(?=주요내용|법률\s*제|참고사항|$)",
                     re.DOTALL | re.IGNORECASE,
                 ),
                 "주요내용": re.compile(
                     r"주요내용\s*(.*?)(?=법률\s*제|신[·•․ㆍ]\s*구조문대비표|참고사항|$)",
                     re.DOTALL | re.IGNORECASE,
                 ),
-                "제안이유_및_주요내용": re.compile(
-                    r"제안이유\s*및\s*주요내용\s*(.*?)(?=법률\s*제|참고사항|$)",
-                    re.DOTALL | re.IGNORECASE,
-                ),
+                # "제안이유_및_주요내용": re.compile(
+                #     r"제안이유\s*및\s*주요내용\s*(.*?)(?=법률\s*제|참고사항|$)",
+                #     re.DOTALL | re.IGNORECASE,
+                # ),
                 "참고사항": re.compile(
                     r"참고사항\s*(.*?)(?=법률\s*제|$)",
                     re.DOTALL | re.IGNORECASE,

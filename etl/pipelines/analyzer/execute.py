@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from .bill_analyzer import PoliticalBillAnalyzer, progress_callback
+from .keywords_bill_analyzer import PoliticalBillAnalyzer, progress_callback
 
 
 async def analyze_massive_directory(directory_path, output_path, batch_size=100):

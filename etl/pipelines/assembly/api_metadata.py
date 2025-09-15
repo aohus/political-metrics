@@ -148,7 +148,21 @@ class AssemblyAPI(BaseAPI):
             },
             default_params={"TAKING_DATE": str((datetime.now() - timedelta(days=1)).date())},
             valid_params={"TITLE", "PERSON"},
-            description="국회의원 활동 정보 조회",
+            description="국회의원 기자회견",
+        ),
+        "writing": APISchema( 
+            endpoint="ninnagrlaelvtzfnt",
+            key="ninnagrlaelvtzfnt",
+            req_params={
+                "Type": "json",
+                "pIndex": 1,
+                "pSize": 10,
+                "KEY": None,
+            },
+            default_params={},
+            # default_params={"WRITE_DATE": str((datetime.now() - timedelta(days=1)).date())},
+            valid_params={"NUM", "TITLE", "BBS_TITLE"},
+            description="국회 보도자료",
         ),
         "activity": APISchema(
             endpoint="NAMEMBEREVENT",

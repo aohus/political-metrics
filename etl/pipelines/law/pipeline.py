@@ -11,7 +11,7 @@ class LawPipeline(BasePipelineImpl):
         self.extractor: ExtractorProtocol = LawExtractor()
         self.processors: list[ProcessorProtocol] = []
 
-    async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
+    async def execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
         """Execute the law data pipeline"""
         # Stage 1: Extract data
         data_paths = await self.stage_processor.execute_stage(

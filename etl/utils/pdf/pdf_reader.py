@@ -62,7 +62,6 @@ class PDFTextCleaner:
         if not text:
             return ""
         text = self._clean_page_num(text)
-        text = self._clean_excape(text)
         return text
 
     def _clean_excape(self, text: str) -> str:
@@ -75,7 +74,7 @@ class PDFTextCleaner:
 
     def _clean_page_num(self, text: str) -> str:
         # 페이지 번호 제거 (- 숫자 - 형태)
-        return re.sub(r"-\s*\d+\s*-", "", text)
+        return re.sub(r"\n-\s*\d+\s*-", "", text)
 
 
 class BasePDFReader:
@@ -181,8 +180,8 @@ class PDFPypdf2Reader(BasePDFReader):
                 "total_pages": len(text_pages),
                 "metadata": metadata,
                 "pages": text_pages,
-                "full_text": "\n\n".join(
-                    [p["text"] for p in text_pages if "text" in p]
+                "full_text": self.text_cleaner.clean(
+                    "\n".join([p["text"] for p in text_pages if "text" in p])
                 ),
             }
 
@@ -354,8 +353,8 @@ class PDFPyMuReader(BasePDFReader):
                 "metadata": metadata,
                 "pages": text_pages,
                 "images": images_data,
-                "full_text": "\n\n".join(
-                    [p["text"] for p in text_pages if "text" in p]
+                "full_text": self.text_cleaner.clean(
+                    "\n".join([p["text"] for p in text_pages if "text" in p])
                 ),
             }
 

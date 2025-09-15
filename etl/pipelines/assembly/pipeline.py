@@ -1,4 +1,4 @@
-from ..pipeline.base_components import BasePipelineImpl
+from ..pipeline.base_components import BasePipelineImpl, ProcessorConfig, StageProcessor
 from ..pipeline.protocols import ExtractorProtocol, ProcessorProtocol, SaverProtocol
 
 # Import necessary components
@@ -11,7 +11,7 @@ from .proposer_processor import BillProposerProcessor
 class AssemblyPipeline(BasePipelineImpl):
     """Pipeline for assembly data extraction and processing"""
 
-    def __init__(self, config: any):
+    def __init__(self, config: any, request_apis: list[str] = None):
         super().__init__(config, "AssemblyPipeline")
         self.extractor: ExtractorProtocol = AssemblyExtractor()
         self.processors: list[ProcessorProtocol] = [
@@ -19,8 +19,44 @@ class AssemblyPipeline(BasePipelineImpl):
             BillProposerProcessor(config)
         ]
         self.write_new_bills = write_new_bills
+        self.processor_factory = {
+            "stage1": [ProcessorConfig(
+                name="AssemblyExtractor",
+                processor=AssemblyExtractor,
+                run_func="extract",
+                init_args={},
+                kwargs={
+                    "request_apis": request_apis,
+                    "output_dir": config.assembly_temp_raw
+                },
+            )],
+            "stage2": [
+                ProcessorConfig(
+                    name="BillProcessor",
+                    processor=BillProcessor,
+                    run_func="process",
+                    init_args={},
+                    kwargs={
+                        "input_data": "results",
+                        "output_dir": config.assembly_temp_formatted,
+                        "alter_bill_link": config.alter_bill_link
+                    },
+                ),
+                ProcessorConfig(
+                    name="BillProposerProcessor",
+                    processor=BillProposerProcessor,
+                    run_func="process",
+                    init_args={},
+                    kwargs={
+                        "input_data": "results",
+                        "output_dir": config.assembly_temp_formatted,
+                        "assembly_ref": config.assembly_ref
+                    },
+                ),
+            ]
+        }
 
-    async def _execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
+    async def execute_pipeline(self, request_apis: list[str]) -> dict[str, any]:
         """Execute the assembly data pipeline"""
         extract_results = await self.stage_processor.execute_stage(
             "Data Extraction", 
@@ -49,3 +85,4 @@ class AssemblyPipeline(BasePipelineImpl):
         """Cleanup assembly pipeline resources"""
         self.logger.info("모든 어셈블리 세션이 정리되었습니다.")
         await super()._cleanup()
+

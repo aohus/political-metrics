@@ -19,7 +19,7 @@ class DocumentPipeline(BasePipelineImpl):
         self.extractor: ExtractorProtocol = DocumentExtractor()
         self.processor: ProcessorProtocol = PDFProcessor()
 
-    async def _execute_pipeline(self, task_id: int, **kwargs) -> dict[str, any]:
+    async def execute_pipeline(self, task_id: int, **kwargs) -> dict[str, any]:
         """Execute the document processing pipeline"""
         new_bill_path = self._get_new_bill_path(task_id)
 

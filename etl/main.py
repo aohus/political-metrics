@@ -37,8 +37,10 @@ class PipelineResult:
 class PipelineConfig:
     name: str
     module_path: str
+    run_func: str
     class_name: str
     init_args: dict[str, Any]
+    kwargs: dict[str, Any]
     timeout: float = 300.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -122,6 +124,7 @@ class PipelineExecutor:
         self,
         name: str,
         module_path: str,
+        run_func: str,
         class_name: str,
         init_args: Optional[dict[str, Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -140,6 +143,7 @@ class PipelineExecutor:
         pl_config = PipelineConfig(
             name=name,
             module_path=module_path,
+            run_func=run_func,
             class_name=class_name,
             init_args=init_args or {},
             kwargs=kwargs or {},
@@ -262,11 +266,10 @@ class PipelineExecutor:
             pipeline_class = getattr(module, pl_config.class_name)
 
             pipeline = pipeline_class(**pl_config.init_args)
-
             if hasattr(pipeline, 'run'):
                 result_data = await asyncio.wait_for(
                     pipeline.run(**kwargs),
-                    timeout=timeout
+                    timeout=None
                 )
             else:
                 raise AttributeError(f"Pipeline {pipeline_name} has no run method")
@@ -317,8 +320,8 @@ class PipelineExecutor:
         pipelines = self.get_pipeline_configs()
         for name, config in pipelines.items():
             self.logger.info(f"Pipeline: {name} start to run")
-            func = config.get("run_func")
-            results[name] = await func(name, config.get("kwargs"))
+            func = config.run_func
+            results[name] = await func(name, **config.kwargs)
 
         results["status"] = "all_completed"
         self.logger.info("All pipelines completed successfully")
@@ -334,7 +337,54 @@ class PipelineExecutor:
         return self._pipeline_configs.get(name)
 
 
-async def main():
+async def run():
+    config = Config("./configs/config.yaml")
+    config.create_directories()
+
+    executor = PipelineExecutor(config)
+    executor.register_pipeline(
+        name="assembly",
+        module_path="pipelines.assembly.pipeline",
+        class_name="AssemblyPipeline",
+        run_func=executor.run_single_pipeline,
+        init_args={
+            "config": config,
+            "request_apis": {
+                "law_bill_member": {"AGE": "22"}, 
+                "law_bill_gov": {"AGE": "22"}, 
+                "law_bill_cap": {"AGE": "22"},
+                "writing": {},
+            }},
+        timeout=None
+    )
+
+    # executor.register_pipeline(
+    #     name="document",
+    #     module_path="pipelines.document.pipeline", 
+    #     class_name="DocumentPipeline",
+    #     run_func=executor.run_multi_pipeline,
+    #     init_args={"config": config},
+    #     kwargs={"max_workers": 4},
+    #     timeout=None
+    # )
+
+    try:
+        results = await executor.run_all_pipelines()
+        print(f"Pipeline execution completed: {results['status']}")
+        print(f"Pipeline execution completed: results: {results}")
+
+        for pipeline_name, result in results.items():
+            if isinstance(result, dict) and 'duration_seconds' in result:
+                print(f"{pipeline_name}: {result['duration_seconds']:.2f}s")
+
+    except Exception as e:
+        print(f"Pipeline execution failed: {e}")
+        return 1
+
+    return 0
+
+
+async def run_part():
     config = Config("./configs/config.yaml")
     config.create_directories()
 
@@ -346,38 +396,29 @@ async def main():
         run_func=executor.run_single_pipeline,
         init_args={"config": config},
         kwargs={"request_apis": {
-            "law_bill_member": {"AGE": "21"}, 
-            "law_bill_gov": {"AGE": "21"}, 
-            "law_bill_cap": {"AGE": "21"},
+            "law_bill_member": {"AGE": "22"}, 
+            "law_bill_gov": {"AGE": "22"}, 
+            "law_bill_cap": {"AGE": "22"},
+            "writing": {},
         }},
         timeout=None
     )
 
-    executor.register_pipeline(
-        name="document",
-        module_path="pipelines.document.pipeline", 
-        class_name="DocumentPipeline",
-        run_func=executor.run_multi_pipeline,
-        init_args={"config": config},
-        kwargs={"max_workers": 4},
-        timeout=None
-    )
-    
     try:
         results = await executor.run_all_pipelines()
         print(f"Pipeline execution completed: {results['status']}")
         print(f"Pipeline execution completed: results: {results}")
-        
+
         for pipeline_name, result in results.items():
             if isinstance(result, dict) and 'duration_seconds' in result:
                 print(f"{pipeline_name}: {result['duration_seconds']:.2f}s")
-                
+
     except Exception as e:
         print(f"Pipeline execution failed: {e}")
         return 1
-    
-    return 0
 
+    return 0
 
 if __name__ == "__main__":
     exit_code = asyncio.run(main())
+    print(f"Exit code: {exit_code}")
