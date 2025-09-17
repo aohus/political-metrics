@@ -4,12 +4,13 @@ from pathlib import Path
 
 import aiofiles
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
 class StreamWriter:
     def __init__(self):
-        self.writers: list[Writer]
+        self.writers: list[Writer] = []
 
     async def loop(self):
         while 1:
@@ -20,10 +21,10 @@ class StreamWriter:
 
 class Writer:
     def __init__(self, job_type, header, chunk_size=100):
-        self.BASEDIR = Path('/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/tasks')
-        self.job_type = job_type
+        self.BASEDIR = Path('/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/tasks_data')
+        self.job_type = job_type.name
         self.chunk_size = chunk_size
-        self.filepath = self.BASEDIR / Path(f'{job_type}.csv')
+        self.filepath = self.BASEDIR / Path(f'{job_type.name}.csv')
         self.data_queue = asyncio.Queue()
         self._initial_write(header)
 

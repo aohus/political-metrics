@@ -1,8 +1,12 @@
 import asyncio
 import copy
+import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 
 class FinanceBusinessProcessor:

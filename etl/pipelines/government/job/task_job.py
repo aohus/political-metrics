@@ -4,7 +4,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from .base_job import Processor
+from .base_job import BaseProcessor
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +22,9 @@ class RiskManagePlanParser:
         return content
 
 
-class TaskProcessor(Processor):
+class TaskProcessor(BaseProcessor):
     def __init__(self, parser, writer, *args, **kwargs):
+        super().__init__(parser, writer, *args, **kwargs)
         self.job_map = {
             '추진': 'background',
             '주요': 'subtasks',
@@ -32,7 +36,6 @@ class TaskProcessor(Processor):
             '23': 'general',
             '24': 'general',
         }
-        super.__init__(parser, writer, *args, **kwargs)
 
     async def get_job_type(self, section_title: str):
         return self.job_map.get(section_title[0:2])

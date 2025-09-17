@@ -1,12 +1,27 @@
 # from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING, Any, Literal, Optional, Type
 
-from datatype import (
+from job import (
+    BaseParser,
+    BaseProcessor,
+    DataClassProtocol,
+    FinanceBusinessParser,
+    FinanceBusinessProcessor,
+    GoalParser,
+    GoalProcessor,
+    ParserProtocol,
+    ProcessorProtocol,
+    SubTaskNestedSectionParser,
+    SubTaskSectionProcessor,
+    TaskParser,
+    TaskProcessor,
+)
+from manager import Manager
+from model import (
     Background,
     Effect,
     Etc,
@@ -17,38 +32,22 @@ from datatype import (
     Target,
     Task,
 )
+from writer import Writer
 
-from .jobs import (
-    BaseParser,
-    BaseProcessor,
-    FinanceBusinessParser,
-    FinanceBusinessProcessor,
-    GoalParser,
-    GoalProcessor,
-    SubTaskNestedSectionParser,
-    SubTaskSectionProcessor,
-    TaskParser,
-    TaskProcessor,
-)
-
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from .jobs import DataClassProtocol, ParserProtocol, ProcessorProtocol
-    from .manager import Manager
-    from .writer import Writer
 
 
 class Job:
-    def __init__(self, manager, processor, writer, data_class, content):
+    def __init__(self, manager, processor, data_class, content, fk):
         self.manager: Manager = manager
         self.processor: ProcessorProtocol = processor
-        self.writer: Writer = writer
         self.data_class: dataclass = data_class
         self.content: str = content
+        self.fk: str = fk
 
     async def process(self):
-        self.processor.process(self)
+        await self.processor.process(self)
 
 
 class JobType(Enum):
@@ -59,7 +58,9 @@ class JobType(Enum):
     FINANCE = "finance"
     SUBTASKS = "subtasks"
     TARGET = "target"
-    GENERAL = "general"
+    EFFECT = "effect"
+    BACKGROUND = "background"
+    PLAN = "plan"
 
 
 @dataclass(frozen=True)  
@@ -144,24 +145,14 @@ class JobConfigRegistry:
         return list(self._configs.keys())
 
 
-class AbstractJobFactory(ABC):
-    @abstractmethod
-    async def create_job(self, manager: Any, job_type: JobType, content: str, linker: Any) -> 'Job':
-        pass
-
-    @abstractmethod
-    async def get_supported_types(self) -> list[JobType]:
-        pass
-
-
 class CacheObj:
     def __init__(self):
         self._parser_cache: dict[JobType, ParserProtocol] = {}
         self._processor_cache: dict[JobType, ProcessorProtocol] = {}
-        self._writers_cache: dict[JobType, Writer] = {}
+        self._writer_cache: dict[JobType, Writer] = {}
 
 
-class JobFactory(AbstractJobFactory):
+class JobFactory:
     def __init__(self, cache_obj: CacheObj, create_writer, config_registry: Optional[JobConfigRegistry] = None):
         self._config_registry = config_registry or JobConfigRegistry()
         self._parser_cache = cache_obj._parser_cache
@@ -169,13 +160,13 @@ class JobFactory(AbstractJobFactory):
         self._writer_cache = cache_obj._writer_cache
         self.create_writer = create_writer
     
-    async def _get_config(self, job_type: JobType) -> bool:
+    def _get_config(self, job_type: JobType) -> bool:
         config = self._config_registry.get_config(job_type)
         if not config:
             raise ValueError(f"Unsupported job type: {job_type.value}")
         return config
             
-    async def _get_or_create_parser(self, config, job_type: JobType) -> ParserProtocol:
+    def _get_or_create_parser(self, config, job_type: JobType) -> ParserProtocol:
         if job_type not in self._parser_cache:
             try:
                 parser = config.parser_class()
@@ -186,11 +177,11 @@ class JobFactory(AbstractJobFactory):
                 raise
         return self._parser_cache[job_type]
     
-    async def _get_or_create_processor(self, config, job_type: JobType) -> ProcessorProtocol:
+    def _get_or_create_processor(self, config, job_type: JobType) -> ProcessorProtocol:
         if job_type not in self._processor_cache:
             try:
-                parser = self._get_or_create_parser(job_type)
-                writer = self.create_writer(job_type, config.data_class.header)
+                parser = self._get_or_create_parser(config, job_type)
+                writer = self.create_writer(job_type, config.data_class.header, 10)
                 processor = config.processor_class(parser, writer)
                 self._processor_cache[job_type] = processor
                 logger.debug(f"Created processor for {job_type.value}")
@@ -199,7 +190,7 @@ class JobFactory(AbstractJobFactory):
                 raise
         return self._processor_cache[job_type]
     
-    async def _get_data_class(self, config, job_type: JobType) -> ProcessorProtocol:
+    def _get_data_class(self, config) -> ProcessorProtocol:
         return config.data_class
     
     async def create_job(self, manager: Any, job_type: JobType, content: str, fk: Any) -> 'Job':
@@ -223,9 +214,8 @@ class JobFactory(AbstractJobFactory):
             if isinstance(job_type, str):
                 job_type = JobType(job_type)
             config = self._get_config(job_type)            
-
             processor = self._get_or_create_processor(config, job_type)
-            data_class = self._get_data_class(config, job_type)
+            data_class = self._get_data_class(config)
             
             job = Job(
                 manager=manager,

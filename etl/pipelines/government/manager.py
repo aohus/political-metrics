@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +15,7 @@ class Manager:
         self.is_done = False
 
     async def add(self, job_type, content, fk):
-        await self.req_queue.put(job_type, content, fk)
+        self.req_queue.put_nowait((job_type, content, fk))
 
     async def create_job(self, job_type, content, fk):
         try:
@@ -24,37 +25,41 @@ class Manager:
                 content=content,
                 fk=fk
             )
-            await self.job_queue.put(job)
+            self.job_queue.put_nowait(job)
             logger.info(f"Created job: {job}")
         except ValueError as e:
             logger.error(f"Error: {e}")
 
     async def parsing(self):
-        while self.job_tasks:
-            await self.run_jobs()
+        while 1:
             await self.create_jobs()
             
-            job_tasks, self.job_tasks = self.job_tasks, asyncio.Queue()
-            while job_tasks:
-                task = job_tasks.get_nowait()
-                if not task.is_done():
-                    self.job_tasks.put(task)
+            # job_tasks, self.job_tasks = self.job_tasks, asyncio.Queue()
+            # while job_tasks.qsize() > 0:
+            #     task = await job_tasks.get()
+                # if not task.is_done():
+                #     await self.job_tasks.put_nowait(task)
 
             if not (self.job_queue or self.req_queue or self.job_tasks) and self.is_done:
                 await self.shutdown()
 
     async def run_jobs(self):
+        logging.info("run jobs")
+        if self.job_queue.empty():
+            return 
+        
         job_queue, self.job_queue = self.job_queue, asyncio.Queue()
-        while job_queue:
-            job = job_queue.get_nowait()
+        while job_queue.qsize() > 0: 
+            job = await job_queue.get()
             task = asyncio.create_task(job.process())
-            self.job_tasks.append(task)
+            self.job_tasks.put_nowait(task)
 
     async def create_jobs(self):
-        req_queue, self.req_queue = self.req_queue, asyncio.Queue()
-        while req_queue:
-            job_type, content, fk = req_queue.get_nowait()
+        logging.info("create jobs")
+        while 1:
+            job_type, content, fk = await self.req_queue.get()
             await self.create_job(job_type, content, fk)
+            await self.run_jobs()
 
     async def shutdown(self):
         clear_tasks = [writer.clear() for writer in self.cache_obj._writer_cache.values()]

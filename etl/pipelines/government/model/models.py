@@ -1,47 +1,13 @@
-import random
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any
+from typing import Optional
+
+from .mixins import model_meta
 
 
-class DataObjectMixin:
-    """모든 데이터 객체가 공유하는 공통 기능"""
-
-    def __post_init__(self):
-        self.id = random.SystemRandom()
-
-    @property
-    def to_csv_row(self) -> str:
-        if hasattr(self, '__dataclass_fields__'):
-            values = [str(getattr(self, field.name)) for field in fields(self)]
-        else:
-            values = [str(v) for v in self.__dict__.values()]
-        return ", ".join(values)
-
-    @property 
-    def header(self) -> str:
-        if hasattr(self, '__dataclass_fields__'):
-            keys = [field.name for field in fields(self)]
-        else:
-            keys = list(self.__dict__.keys())
-        return ", ".join(keys)
-
-    def get_field_values(self) -> list[Any]:
-        if hasattr(self, '__dataclass_fields__'):
-            return [getattr(self, field.name) for field in fields(self)]
-        else:
-            return list(self.__dict__.values())
-
-    def get_field_names(self) -> list[str]:
-        if hasattr(self, '__dataclass_fields__'):
-            return [field.name for field in fields(self)]
-        else:
-            return list(self.__dict__.keys())
-
-
-class BaseDataObject(DataObjectMixin):
+class BaseDataObject(metaclass=model_meta):
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}({self.to_str})"
+        return f"{self.__class__.__name__} {self.goal}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -49,14 +15,26 @@ class BaseDataObject(DataObjectMixin):
     def to_tuple(self) -> tuple:
         return tuple(self.get_field_values())
 
+    @property
+    def to_csv_row(self):
+        if hasattr(self, '__dataclass_fields__'):
+            values = [str(getattr(self, field.name)) for field in fields(self)]
+        else:
+            values = [str(v) for v in self.__dict__.values()]
+        return ", ".join(values)
 
-### 성과목표 [Ⅰ-1] 형식
+
+
+
+# ============================================================================
+# 성과목표: Ⅰ-1 미래형 교육
+# ============================================================================
 @dataclass
 class Goal(BaseDataObject):
     fk: str
-    id: str
     goal_num: str
     goal: str
+    id: Optional[int] = None
 
     def to_dict(self):
         year, ministry = self.fk.split(", ")
@@ -66,22 +44,18 @@ class Goal(BaseDataObject):
             '성과목표번호': self.goal_num,
             '성과목표': self.goal,
         }
-    
-    @property
-    def to_str(self):
-        return ", ".join([str(v) for v in self.__dict__.values()])
-    
-    @property
-    def header(self):
-        return ", ".join([str(k) for k in self.__dict__.keys()])
-    
 
-### 성과목표 Ⅰ-1: (3) 위기관리 계획, (4) 기타, (5) 주요계획
+# ============================================================================
+# 성과목표 Ⅰ-1 미래형 교육
+# - (3) 위기관리 계획
+# - (4) 기타
+# - (5) 주요계획
+# ============================================================================
 @dataclass
 class Etc(BaseDataObject):
-    id: str
     goal_id: str
     etc: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -93,9 +67,9 @@ class Etc(BaseDataObject):
 
 @dataclass
 class RiskManagePlan(BaseDataObject):
-    id: str
     goal_id: str
     risk_manange_plan: str
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -108,9 +82,9 @@ class RiskManagePlan(BaseDataObject):
 @dataclass
 class Task(BaseDataObject):
     goal_id: str
-    id: str
     no: str
     title: str
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -120,9 +94,20 @@ class Task(BaseDataObject):
             '관리과제번호': self.no,
         }
 
+# ============================================================================
+# 성과목표 Ⅰ-1 미래형 교육 -> (5)주요계획 
+# [① 디지털 전환, ..., ⑥ "관리과제"]
+# 
+# 관리과제: Ⅰ-1-① 디지털 전환
+# - 배경
+# - 대상
+# - 주요내용(사업 리스트)
+# - 계획
+# - 재정사업
+# - 기대효과
+# ============================================================================
 
-### 성과목표 Ⅰ-1: (5)주요계획 [①과제, ..., ⑥과제]
-### Ⅰ-1-① 배경, 대상, 주요내용(사업 리스트), 계획, 재정사업, 기대효과
+
 class CategoryType(Enum):
     GENERAL = "일반"
     SPECIAL = "특별회계"
@@ -131,7 +116,6 @@ class CategoryType(Enum):
 
 @dataclass
 class FinanceBusiness(BaseDataObject):
-    id: int = 0
     task_id: int = 0
     subject: str = ""
     category: CategoryType = CategoryType.GENERAL
@@ -142,6 +126,7 @@ class FinanceBusiness(BaseDataObject):
     sunit: str = ""
     ssunit: list = ""
     ps: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -158,17 +143,17 @@ class FinanceBusiness(BaseDataObject):
             '내내역사업목록': self.ssunit,
         }
 
+
 @dataclass
 class SubTask(BaseDataObject):
-    id: int = 0
     task_id: int = 0
-
+    id: Optional[int] = None
 
 @dataclass
 class Background(BaseDataObject):
-    id: str
     task_id: str
     background: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -177,11 +162,12 @@ class Background(BaseDataObject):
             '추진배경': self.title,
         }
 
+
 @dataclass
 class Plan(BaseDataObject):
-    id: str
     task_id: str
     plan: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -192,10 +178,10 @@ class Plan(BaseDataObject):
 
 @dataclass
 class Target(BaseDataObject):
-    id: str
     task_id: str
     target: str = ""
     related: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {
@@ -207,9 +193,9 @@ class Target(BaseDataObject):
 
 @dataclass
 class Effect(BaseDataObject):
-    id: str
     task_id: str
     effect: str = ""
+    id: Optional[int] = None
 
     def to_dict(self):
         return {

@@ -2,14 +2,18 @@ import asyncio
 import copy
 import logging
 import re
-from typing import Any, Dict, Optional, Protocol, Tuple, Type
+from typing import TYPE_CHECKING, Any, Protocol
 
+if TYPE_CHECKING:
+    from ..manager import Manager
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
 class ProcessorProtocol(Protocol):
     async def process(self, data: Any) -> Any: ...
-    
+
     async def process_lines(self, data: Any) -> Any: ...
     
     async def update_data(self, data: Any) -> Any: ...
@@ -32,12 +36,16 @@ class BaseProcessor:
         self.job_map = {}
 
     async def process(self, job):
+        logging.info(f"{job} processing start")
         await self.process_lines(job)
     
     async def process_lines(self, job):
-        for title, section_title, section_content in self.parser.parse_lines(job.content):
-            fk = await self.create_data(job.data_class, title)
-            await self.request_job(job.manager, fk, section_title, section_content)
+        logging.info(f"{job} parse lines")
+        async for parsed in self.parser.parse(job.content):
+            parsed
+            logging.info(f"info: {title}")
+            fk = await self.create_data(job.data_class, title, job.fk)
+            asyncio.create_task(self.request_job(job.manager, fk, section_title, section_content))
 
     async def create_data(self, data_class, task_title):
         data = data_class(title=task_title)
@@ -46,15 +54,21 @@ class BaseProcessor:
     async def update_data(self, data, infos):
         data.f = infos
     
-    async def request_job(self, manager: Manager, fk, section_title, section_content):
+    async def request_job(self, manager, fk, section_title, section_content):
         if not (section_title or section_content):
             logger.warning("section_title, section_content is Required")
         
-        if job_type := self.get_job_type(section_title):
+        if job_type := await self.get_job_type(section_title):
+            await self.writer.add(job_type, section_content, fk)
             asyncio.create_task(manager.add(job_type, section_content, fk))
 
     async def get_job_type(self, section_title: str):
         return self.job_map.get(section_title)
+
+
+class ParsedInfo:
+    event: str = "request_job" | "continue"
+    data: dict = {}
 
 
 class BaseParser:
@@ -62,21 +76,15 @@ class BaseParser:
         self.compiler = re.compile(r'([ㅇ◦]\s*.+?)(?=ㅇ|◦|$)', re.DOTALL | re.IGNORECASE)
 
     async def create_lines(self, section: str):
-        return await self._create_lines(section)
+        if section:
+            return await self._create_lines(section)
 
     async def _create_lines(self, section: str):
         return section.split("\n")
     
-    async def parse_lines(self, lines: list):
-        for line in lines:
-            return await self._parse_lines(line)
-
-    async def _parse_lines(self, line: str) -> iter:
-        return self.compiler.finditer(line)
-    
     async def parse(self, content) -> iter:
         for matches in self.compiler.finditer(content):
-            yield matches
+            yield ParsedInfo(event='request_job', data=matches)
 
     async def parse_with_line(self, content) -> iter:
         lines = self.create_lines(content)
@@ -85,7 +93,7 @@ class BaseParser:
                 yield matches
 
 
-class NestedParser:
+class BaseNestedParser:
     def __init__(self):
         self.infos = []
         self.lines = []

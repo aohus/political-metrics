@@ -3,11 +3,11 @@ from pathlib import Path
 
 
 class GoalDocReader:
-    BASE_DIR = "/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/"
+    BASE_DIR = Path("/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/")
 
     async def read(self, year, ministry):
-        filename = f"{ministry}/성과목표별시행계획_{ministry}_{year}.json"    
-        with open(os.file(self.BASEDIR, filename), 'r') as f:
+        filename = Path(f"{ministry}/성과관리시행계획_{ministry}_{year}.txt")
+        with open(self.BASE_DIR / filename, 'r') as f:
             return f.read()
 
     async def read_goal_ref():
@@ -25,7 +25,7 @@ class GoalDocReader:
     
     @staticmethod
     async def result():
-        pathdir = Path('/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/tasks')
+        pathdir = Path('/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/tasks_data/')
         for fname in os.listdir(pathdir):
             with open(f"{pathdir}/{fname}", 'r') as f:
                 data = f.read()

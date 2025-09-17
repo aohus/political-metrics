@@ -1,9 +1,14 @@
+import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
 
-from .base_job import BaseNestedParser, Result
+from model import Result
 
+from .base_job import BaseNestedParser
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 @dataclass
 class SubTaskSection:

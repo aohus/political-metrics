@@ -1,9 +1,9 @@
 import asyncio
 
-from .doc_reader import GoalDocReader
-from .job import CacheObj, JobFactory
-from .manager import Manager
-from .writer import StreamWriter, Writer
+from job_factory import CacheObj, JobFactory
+from manager import Manager
+from utils.doc_reader import GoalDocReader
+from writer import StreamWriter, Writer
 
 
 async def run_manager():
@@ -22,15 +22,15 @@ async def run_manager():
 
 async def main():
     manager = await run_manager()
-    parsing_task = asyncio.create_task(manager.parsing())
 
     doc_reader = GoalDocReader()
-    req_list = [('교육부', '2022')]
+    req_list = [('2022', '교육부')]
     for year, ministry in req_list:
         content = await doc_reader.read(year, ministry)
         await manager.add('goal', content, f"{year}, {ministry}")
+    await manager.parsing()
 
-    parsing_task.add_done_callback(doc_reader.result)
+    # parsing_task.add_done_callback(doc_reader.result)
 
 if __name__ == '__main__':
     asyncio.run(main())
