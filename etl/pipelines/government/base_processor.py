@@ -1,99 +1,88 @@
-import asyncio
 import copy
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Protocol
+from dataclasses import dataclass
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ..manager import Manager
+import job
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-class ProcessorProtocol(Protocol):
-    async def process(self, data: Any) -> Any: ...
-
-    async def process_lines(self, data: Any) -> Any: ...
-    
-    async def update_data(self, data: Any) -> Any: ...
-    
-    async def create_data(self, data: Any) -> Any: ...
-
-
-class ParserProtocol(Protocol):
-    async def parse(self, lines: list) -> Any: ...
-
-
-class DataClassProtocol(Protocol):
-    def to_dict(self) -> dict: ...
-
-
-class BaseProcessor:
-    def __init__(self, parser, writer, *args, **kwargs):
-        self.parser = parser
-        self.writer = writer
-        self.job_map = {}
-
-    async def process(self, job):
-        logging.info(f"{job} processing start")
-        await self.process_lines(job)
-    
-    async def process_lines(self, job):
-        logging.info(f"{job} parse lines")
-        async for parsed in self.parser.parse(job.content):
-            parsed
-            logging.info(f"info: {title}")
-            fk = await self.create_data(job.data_class, title, job.fk)
-            asyncio.create_task(self.request_job(job.manager, fk, section_title, section_content))
-
-    async def create_data(self, data_class, task_title):
-        data = data_class(title=task_title)
-        return data.id
-
-    async def update_data(self, data, infos):
-        data.f = infos
-    
-    async def request_job(self, manager, fk, section_title, section_content):
-        if not (section_title or section_content):
-            logger.warning("section_title, section_content is Required")
-        
-        if job_type := await self.get_job_type(section_title):
-            await self.writer.add(job_type, section_content, fk)
-            asyncio.create_task(manager.add(job_type, section_content, fk))
-
-    async def get_job_type(self, section_title: str):
-        return self.job_map.get(section_title)
-
-
+@dataclass
 class ParsedInfo:
-    event: str = "request_job" | "continue"
-    data: dict = {}
+    event: str  # "register_job", "create_data", "update_data"
+    data: dict
 
 
-class BaseParser:
-    def __init__(self):
-        self.compiler = re.compile(r'([ㅇ◦]\s*.+?)(?=ㅇ|◦|$)', re.DOTALL | re.IGNORECASE)
+class BaseProcessor(job.AbstractProcessor):
+    def __init__(self, parser, *args, **kwargs):
+        self.parser = parser
+        self._memo = {}
 
-    async def create_lines(self, section: str):
-        if section:
-            return await self._create_lines(section)
-
-    async def _create_lines(self, section: str):
-        return section.split("\n")
+    def process(self, content) -> iter:
+        return self._process_lines(content)
     
-    async def parse(self, content) -> iter:
-        for matches in self.compiler.finditer(content):
-            yield ParsedInfo(event='request_job', data=matches)
+    def _process_lines(self, content) -> iter:
+        obj = {}
+        for parsed in self.parser.parse(content):
+            if parsed.event == 'update_data':
+                completed_obj, obj = self._update_data(parsed.data, obj)
+                if completed_obj:
+                    yield ("create_data", completed_obj)
+            elif parsed.event == 'create_data':
+                yield (parsed.event, parsed.data)
+            elif parsed.event == 'register_job':
+                yield self._process_data(parsed)
+            elif parsed.event == '':
+                yield self._pick_event(parsed)
+            else:
+                logger.error(f'invalid event {parsed.event}')
 
-    async def parse_with_line(self, content) -> iter:
-        lines = self.create_lines(content)
+    def _pick_event(self, parsed):
+        """update data logic"""
+
+    def _update_data(self, parsed_data: dict, obj: dict) -> tuple[Optional[dict], dict]:
+        """update data logic"""
+        pass
+
+    def _process_data(self, parsed):
+        title = parsed.data.get('section_title')
+        parsed.data['job_type'] = self._get_job_type(title)
+        return (parsed.event, parsed.data)
+    
+    def _get_job_type(self, content):
+        """update data logic"""
+        raise NotImplementedError
+
+
+class BaseParser(job.AbstractParser):
+    def __init__(self):
+        self.compiler = re.compile(r'([ㅇ◦□]\s*.+?)(?=ㅇ|◦|□|$)', re.DOTALL | re.IGNORECASE)
+
+    def create_lines(self, content: str):
+        if content:
+            return self._create_lines(content)
+
+    def _create_lines(self, content: str):
+        return [content]
+
+    def parse(self, content: str):
+        lines = self._create_lines(content)
+        return self._parse(lines)
+
+    def _parse(self, lines: list) -> iter:
         for line in lines:
             for matches in self.compiler.finditer(line):
-                yield matches
+                content = matches[1].replace('\n', '\\n')
+                if not content:
+                    logger.error('content not found')
+                    continue
+                yield ParsedInfo(event='create_data', data={'content': content})
 
 
-class BaseNestedParser:
+class BaseNestedParser(BaseParser):
     def __init__(self):
         self.infos = []
         self.lines = []

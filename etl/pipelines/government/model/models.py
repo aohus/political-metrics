@@ -1,11 +1,11 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Optional
 
-from .mixins import model_meta
+from .id_generator import generate_short_id
 
 
-class BaseDataObject(metaclass=model_meta):
+class BaseDataObject:
     def __str__(self) -> str:
         return f"{self.__class__.__name__} {self.goal}"
 
@@ -14,16 +14,27 @@ class BaseDataObject(metaclass=model_meta):
 
     def to_tuple(self) -> tuple:
         return tuple(self.get_field_values())
+    
+    def to_dict(self) -> dict:
+        raise NotImplementedError
+
+    @property
+    def header(self):
+        if hasattr(self, 'to_dict'):
+            keys = list(self.to_dict().keys())
+        elif hasattr(self, '__dataclass_fields__'):
+            keys = [f.name for f in fields(self)]
+        else:
+            keys = list(self.__dict__.keys())
+        return ", ".join(keys)
 
     @property
     def to_csv_row(self):
         if hasattr(self, '__dataclass_fields__'):
-            values = [str(getattr(self, field.name)) for field in fields(self)]
+            values = [str(getattr(self, f.name)) for f in fields(self)]
         else:
             values = [str(v) for v in self.__dict__.values()]
         return ", ".join(values)
-
-
 
 
 # ============================================================================
@@ -32,17 +43,18 @@ class BaseDataObject(metaclass=model_meta):
 @dataclass
 class Goal(BaseDataObject):
     fk: str
-    goal_num: str
-    goal: str
-    id: Optional[int] = None
+    title: str
+    id: str = field(default_factory=generate_short_id)
+    # goal_num: str
 
     def to_dict(self):
         year, ministry = self.fk.split(", ")
         return {
             '사업연도': year,
             '소관': ministry,
-            '성과목표번호': self.goal_num,
-            '성과목표': self.goal,
+            '성과목표번호': self.title,
+            'ID': self.id,
+            # '성과목표': self.goal,
         }
 
 # ============================================================================
@@ -53,45 +65,45 @@ class Goal(BaseDataObject):
 # ============================================================================
 @dataclass
 class Etc(BaseDataObject):
-    goal_id: str
-    etc: str = ""
-    id: Optional[int] = None
+    fk: str
+    content: str
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '성과목표ID': self.fk,
+            '기타': self.content,
             'ID': self.id,
-            '성과목표ID': self.goal_id,
-            '기타': self.title,
         }
 
 
 @dataclass
-class RiskManagePlan(BaseDataObject):
-    goal_id: str
-    risk_manange_plan: str
-    id: Optional[int] = None
+class Risk(BaseDataObject):
+    fk: str
+    content: str
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '성과목표ID': self.fk,
+            '위기관리계획': self.content,
             'ID': self.id,
-            '성과목표ID': self.goal_id,
-            '위기관리계획': self.title,
         }
 
 
 @dataclass
 class Task(BaseDataObject):
-    goal_id: str
+    fk: str
     no: str
     title: str
-    id: Optional[int] = None
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
-            '성과목표ID': self.goal_id,
-            '관리과제ID': self.id,
+            '성과목표ID': self.fk,
             '관리과제명': self.title,
             '관리과제번호': self.no,
+            '관리과제ID': self.id,
         }
 
 # ============================================================================
@@ -116,22 +128,22 @@ class CategoryType(Enum):
 
 @dataclass
 class FinanceBusiness(BaseDataObject):
-    task_id: int = 0
-    subject: str = ""
-    category: CategoryType = CategoryType.GENERAL
-    finance_code: str = ""
-    subsidy_code: str = ""
-    program: str = ""
-    unit: str = ""
-    sunit: str = ""
-    ssunit: list = ""
-    ps: str = ""
-    id: Optional[int] = None
+    fk: str
+    subject: str
+    category: Optional[str] = None
+    finance_code: Optional[str] = None
+    subsidy_code: Optional[str] = None
+    program: Optional[str] = None
+    unit: Optional[str] = None
+    sunit: Optional[str] = None
+    ssunit: Optional[list] = None
+    sssunit: Optional[list] = None
+    extra: Optional[list] = None
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
-            'ID': self.id,
-            '관리과제ID': self.task_id,
+            '관리과제ID': self.fk,
             '주제': self.subject,
             '회계구분': self.category,
             '회계코드': self.finance_code,
@@ -139,69 +151,87 @@ class FinanceBusiness(BaseDataObject):
             '프로그램명': self.program,
             '단위사업명': self.unit,
             '내역사업명': self.sunit,
-            '비고': self.ps,
             '내내역사업목록': self.ssunit,
+            '특교사업목록': self.sssunit,
+            '비고': self.extra,
+            'ID': self.id,
         }
 
 
 @dataclass
 class SubTask(BaseDataObject):
-    task_id: int = 0
-    id: Optional[int] = None
-
-@dataclass
-class Background(BaseDataObject):
-    task_id: str
-    background: str = ""
-    id: Optional[int] = None
+    fk: str
+    sep: str
+    title: str
+    content: str
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '관리과제ID': self.fk,
+            '분리기호': self.sep,
+            '세부과제명': self.title, 
+            '세부과제내용': self.content,
             'ID': self.id,
-            '관리과제ID': self.task_id,
-            '추진배경': self.title,
+        }
+
+@dataclass
+class Background(BaseDataObject):
+    fk: str
+    content: str
+    id: str = field(default_factory=generate_short_id)
+
+    def to_dict(self):
+        return {
+            '관리과제ID': self.fk,
+            '추진배경': self.content,
+            'ID': self.id,
         }
 
 
 @dataclass
 class Plan(BaseDataObject):
-    task_id: str
-    plan: str = ""
-    id: Optional[int] = None
+    fk: str
+    content: str
+    plan_at: str
+    extra: str
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '관리과제ID': self.fk,
+            '계획': self.content,
+            '일정': self.plan_at,
+            '비고': self.extra,
             'ID': self.id,
-            '관리과제ID': self.task_id,
-            '계획': self.plan,
         }
 
 @dataclass
 class Target(BaseDataObject):
-    task_id: str
-    target: str = ""
-    related: str = ""
-    id: Optional[int] = None
+    fk: str
+    target_type: Optional[str]
+    target: Optional[str]
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '관리과제ID': self.fk,
+            '대상자구분': self.target_type,
+            '대상자': self.target,
             'ID': self.id,
-            '관리과제ID': self.task_id,
-            '수혜자': self.target,
-            '이해관계자': self.related,
         }
 
 @dataclass
 class Effect(BaseDataObject):
-    task_id: str
-    effect: str = ""
-    id: Optional[int] = None
+    fk: str
+    content: str
+    id: str = field(default_factory=generate_short_id)
 
     def to_dict(self):
         return {
+            '관리과제ID': self.fk,
+            '기대효과': self.content,
             'ID': self.id,
-            '관리과제ID': self.task_id,
-            '기대효과': self.target,
         }
 
 

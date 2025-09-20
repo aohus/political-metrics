@@ -1,39 +1,36 @@
 import logging
 import re
 from dataclasses import dataclass
-from enum import Enum
 
-from model import Result
-
-from .base_job import BaseNestedParser
+from base_processor import BaseNestedParser, BaseParser, BaseProcessor, ParsedInfo
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
-@dataclass
-class SubTaskSection:
-    pass
+
+class SubTaskSectionProcessor(BaseProcessor):
+    pass 
 
 
-class SubTaskSectionProcessor:
-    pass
-
-
-class SubTaskNestedSectionParser(BaseNestedParser):
+class SubTaskNestedSectionParser(BaseParser):
     def __init__(self):
-        super().__init__()
-        self.section_title = 'subtasks'
-        self.subtasks_compiler = re.compile(r'([^가-힣])\s*(\((.+?)\))?\s*(.+?)[^가-힣\d\w]?\n+(?=[^가-힣 ])', re.DOTALL | re.IGNORECASE)
+        self.compiler = re.compile(
+            r'([^가-힣])\s*(\((.+?)\))?\s*(.+?)[^가-힣\d\w]?\n+(?=[^가-힣 ])', 
+            re.DOTALL | re.IGNORECASE)
 
-    def _create_lines(self, section: str):
-        section = re.sub(r"\n[①②③④⑤⑥⑦⑧⑨⑩➊➋➌➍]", "\n①", section)
-        self.lines = self.subtasks_compiler.findall(section)
-        self.max_step = len(self.lines)
-        
-    def _process_line(self, line: tuple) -> tuple[str, str]:
-        sep, _, title, content = line
-        content = content.replace('\n', ' ')
-        return sep, {'sep': sep, 'title': title, 'content': content}
+    def _create_lines(self, content: str):
+        content = re.sub(r"\n[①②③④⑤⑥⑦⑧⑨⑩➊➋➌➍]", "\n①", content)
+        return [content]
+    
+    def _parse(self, lines: list) -> iter:
+        for line in lines:
+            for matches in self.compiler.finditer(line):
+                sep, _, title, content = matches.groups()
+                content = content.replace('\n', ' ')
+                if not content:
+                    continue
+                yield ParsedInfo(event='create_data', data={'sep': sep, 'title': title, 'content': content})
+                # return sep, {'sep': sep, 'title': title, 'content': content}
 
 
 

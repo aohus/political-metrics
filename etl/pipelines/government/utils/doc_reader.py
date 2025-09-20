@@ -30,3 +30,7 @@ class GoalDocReader:
             with open(f"{pathdir}/{fname}", 'r') as f:
                 data = f.read()
                 print(fname, len(data))
+
+    @classmethod
+    def get_filepath(cls, year, ministry):
+        return cls.BASE_DIR / Path(f"{ministry}/성과관리시행계획_{ministry}_{year}.txt")
