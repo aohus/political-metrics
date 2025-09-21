@@ -14,7 +14,7 @@ class JobLoop(AbstractJobLoop):
 
     async def run(self):
         while 1:
-            docs = self.docs[:]
+            docs, self.docs[:] = self.docs[:], []
             if not docs:
                 if self._sleep == 2:
                     return
@@ -23,16 +23,15 @@ class JobLoop(AbstractJobLoop):
                 self._sleep += 1
                 continue
 
-            self.docs[:] = []
             for doc in docs:
                 if doc.results:
                     logger.info(f"{doc.name} completed with result: {doc.result}")
                     continue 
 
                 self.docs.append(doc)
-                if doc.ready_queue:
+                if not doc.ready_queue.empty():
                     job = await doc.ready_queue.get()
-                await job.execute()
+                    await job.execute()
 
     async def shutdown(self):
         pass

@@ -50,5 +50,5 @@ class GoalParser(base_processor.BaseParser):
         return self._create_lines(content)
 
     def _create_lines(self, content: str) -> iter:
-        pattern = r'(성과목표\s*[ⅠⅡⅢⅣⅤV]-[1-5])(.*?)(?=성과목표\s*[ⅠⅡⅢⅣⅤV]-[1-5]|전략목표\s*[ⅠⅡⅢⅣⅤV]|$)'
+        pattern = r'(성과목표\s*[ⅠⅡⅢⅣⅤV]-[1-5])(.*?)(?=성과목표\s*[ⅠⅡⅢⅣⅤV]-[1-5]|전략목표\s*[ⅠⅡⅢⅣⅤV]|Ⅳ\.\s*환류|Ⅳ\.\s*협업과제|$)'
         return re.compile(pattern, re.DOTALL | re.IGNORECASE).findall(content)

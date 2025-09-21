@@ -32,10 +32,10 @@ class TaskProcessor(BaseProcessor):
 class TaskParser(BaseParser):
     def __init__(self):
         self.compiler = re.compile(
-                r'□?\s*(?P<section_title>추진\s*배경\s*.*?|주요\s*내용.*?|수혜자\s*및.*?|기대\s*효과.*?|관련\s*재정.*?|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획.*?)'
-                r'\n(?P<section_content>.*?)'
-                r'(?=추진\s*배경|(?:□\s*)주요\s*내용\s*및|[^\(]수혜자\s*및|이해관계자\s등|성과지표\s*및|수혜자\s*체감도|기대\s*효과|관련\s*재정|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획|$)'
-                , re.DOTALL | re.IGNORECASE)
+            r'□?\s*(?P<section_title>추진\s*배경\s*.*?|주요\s*내용.*?|수혜자\s*및.*?|기대\s*효과.*?|관련\s*재정.*?|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획.*?)'
+            r'\n(?P<section_content>.*?)'
+            r'(?=(?:□\s*)추진\s*배경|주요\s*내용\s*및|[^\(]수혜자\s*및|이해관계자\s등|성과지표\s*및|수혜자\s*체감도|기대\s*효과|관련\s*재정|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획|$)'
+            , re.DOTALL | re.IGNORECASE)
 
     def _create_lines(self, content: str):
         """
@@ -43,10 +43,10 @@ class TaskParser(BaseParser):
         성과목표Ⅰ-1 [① 관리과제, ... , ⑥ 관리과제]
         """
         pattern = (
-            r'[\uf000-\U000fffff]\s*(?P<task_title>.{1,50})'
-            r'(\([ⅠⅡⅢⅣⅤ1234567①②③④⑤⑥⑦⑧⑨⑩\-]+?\))'
+            r'[\uf000-\U000fffff]\s*(?P<task_title>.{1,100})'
+            r'(?:\(([ⅠⅡⅢⅣⅤ1234567①②③④⑤⑥⑦⑧⑨⑩\-]+?)\))'
             r'\n(?P<task_content>□?\s*추진\s*배경.+?)'
-            r'(?=[\uf000-\U000fffff]\s*.{1,50}□?\s*추진\s*배경|Ⅳ\s|$)'
+            r'(?=[\uf000-\U000fffff]\s*.{1,100}□?\s*추진\s*배경|Ⅳ\s|$)'
         )
         return re.compile(pattern, re.DOTALL | re.IGNORECASE).finditer(content)
 
@@ -58,10 +58,10 @@ class TaskParser(BaseParser):
         lines = self.create_lines(content)
         for line in lines:
             title, no, section = line.groups()
-            for match in self.compiler.finditer(section):
-                section_title, section = match.groups()
+            title = title.replace('\n', '')
+            for section_title, section in self.compiler.findall(section):
                 if not section or len(section) < 20:
-                    # logger.error(f"task title: '{title}' has no section({section[0:10] if section else section}), section_title({section_title})")
+                    logger.error(f"task title: '{title}' has no section({section[0:10] if section else section}), section_title({section_title})")
                     continue
                 yield ParsedInfo(event='register_job', 
                                  data={'obj': {'title': title, 'no': no},
