@@ -1,9 +1,11 @@
 import asyncio
+import csv
+import json
 import logging
 import os
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import aiofiles
 
@@ -27,16 +29,10 @@ class TargetWriter:
         return filepath, info.data
 
     async def insert(self, info):
+        filetype = info.get('filetype')
         filename = info.get('filename')
-        data = '\n' + info.get('data')
-
-        if filename not in self.exist:
-            header = info.get('header')
-            data = header + data
-            self.exist.add(filename)
-        
-        filepath = self.BASE_DIR / Path(filename)
-        await self.write(filepath, data)
+        data = info.get('data')
+        await self.write(filetype, filename, data)
 
     async def write_all(self):
         group = {k: [] for k in self.exist}
@@ -49,10 +45,33 @@ class TargetWriter:
         for filepath, data in group.items():
             text = '\n'.join([obj.to_csv_row for obj in data])
             await self.write(filepath, text)
+    
+    async def write(self, filetype: str, filename: str, data: Optional[str | dict]):
+        if filetype == 'json':
+            await self._write_json(filename, data)
 
-    async def write(self, filepath: str, text: str):
-        async with aiofiles.open(filepath, "a", encoding="utf-8", errors='replace') as f:
-            await f.write(text)
+        if filetype == 'csv':
+            await self._write_csv(filename, data)
+    
+    async def _write_csv(self, filename, data):
+        filepath = self.BASE_DIR / Path(f'{filename}.csv')
+        header = data[0].header
+        
+        if filename not in self.exist:
+            async with aiofiles.open(filepath, mode='w') as f:
+                await f.write(header)
+                self.exist.add(filename)
+        try:
+            async with aiofiles.open(filepath, mode='a') as f:
+                text = '\n' + '\n'.join([obj.to_csv_row for obj in data])
+                await f.write(text)
+        except Exception as e:
+            logger.error(f"Error writing CSV file: {e}")
+
+    async def _write_json(self, filename: str, data):
+        filepath = self.BASE_DIR / Path(f'{filename}.json')
+        async with aiofiles.open(filepath, 'a', encoding='utf-8') as f:
+            await f.write(json.dumps(data, ensure_ascii=False, indent=4))
         # logger.info(f"Write '{filepath}' len: {len(text)} Successfully!")
 
 
@@ -80,9 +99,11 @@ class Writer:
 
     async def write_file(self, filename: str, data: str):
         filepath = self.TMP_DIR / Path(filename)
-        async with aiofiles.open(filepath, "w", encoding="utf-8", errors='replace') as f:
-            await f.write(data)
-            # logger.info(f"Write '{filename}' len: {len(data)} Successfully!")
+        try:
+            async with aiofiles.open(filepath, "w", encoding="utf-8", errors='replace') as f:
+                await f.write(data)
+        except Exception as e:
+            logger.error(f"Write '{filename}' Failed\ne: {e}")
 
 
 class Reader:
@@ -94,6 +115,7 @@ class Reader:
             init, path = False, self.TMP_DIR / Path(filename)
         else:
             init, path = True, filename
+
         try:
             async with aiofiles.open(path, 'r', encoding='utf-8', errors='replace') as f:
                 data = await f.read()
@@ -110,7 +132,8 @@ class Reader:
                         logger.error(f"Error deleting file {path}: {e}")
                 return data
         except:
-            print(filename)
+            # print(filename)
+            pass
 
 
 class GoalDocReader:

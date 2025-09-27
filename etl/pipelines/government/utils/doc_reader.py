@@ -3,10 +3,10 @@ from pathlib import Path
 
 
 class GoalDocReader:
-    BASE_DIR = Path("/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/부처별/")
+    BASE_DIR = Path("/Users/aohus/Workspaces/github/politics/etl/data/government/국정과제/성과관리계획_및_평가/성과관리시행계획/TXT")
 
     async def read(self, year, ministry):
-        filename = Path(f"{ministry}/성과관리시행계획_{ministry}_{year}.txt")
+        filename = Path(f"성과계획_{ministry}_{year}.txt")
         with open(self.BASE_DIR / filename, 'r') as f:
             return f.read()
 
@@ -33,4 +33,4 @@ class GoalDocReader:
 
     @classmethod
     def get_filepath(cls, year, ministry):
-        return cls.BASE_DIR / Path(f"{ministry}/성과관리시행계획_{ministry}_{year}.txt")
+        return cls.BASE_DIR / Path(f"성과계획_{ministry}_{year}.txt")

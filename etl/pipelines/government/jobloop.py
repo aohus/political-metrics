@@ -29,9 +29,8 @@ class JobLoop(AbstractJobLoop):
                     continue 
 
                 self.docs.append(doc)
-                if not doc.ready_queue.empty():
-                    job = await doc.ready_queue.get()
-                    await job.execute()
+                job = await doc.ready_queue.get()
+                await job.execute()
 
     async def shutdown(self):
         pass

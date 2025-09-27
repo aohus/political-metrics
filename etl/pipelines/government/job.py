@@ -49,7 +49,7 @@ class Job(AbstractJob):
     async def execute(self):
         section = await self.reader.read(self.filepath)
         if not section:
-            logger.info(f'no data from filepath: {self.filepath}, doc: {self.doc.name}, fk: {self.fk}')
+            logger.info(f'No data: filepath: {self.filepath}, doc: {self.doc.name}, fk: {self.fk}')
             return
         
         for event, data in self.processor.process(section):
@@ -57,18 +57,15 @@ class Job(AbstractJob):
                 self._create_and_register(**data)
             elif event == 'create_data':
                 self._create_data(data)
+            elif event == 'create_data_many':
+                self._create_data_many(data)
             else:
                 logger.info(f"Unvalid event type {event}")
 
         if not self._data:
-            logger.info(f'path: {self.filepath}')
+            logger.info(f'Nothing to save: "doc:{self.doc.name}, fk: {self.fk}, job_type: {self.job_type}"')
         else:
             await self.write_rows()
-
-    def _get_or_create_data(self, obj: dict) -> str:
-        if id := self._memo.get(str(obj)):
-            return id
-        return self._create_data(obj)
 
     def _create_data(self, obj: dict) -> str:
         data = self.dataclass_factory(fk=self.fk, **obj)
@@ -78,6 +75,15 @@ class Job(AbstractJob):
         self._data.append(data)
         self._memo[str(obj)] = data.id
         return data.id
+
+    def _create_data_many(self, data_list: list):
+        for data in data_list:
+            self._create_data(data)
+
+    def _get_or_create_data(self, obj: dict) -> str:
+        if id := self._memo.get(str(obj)):
+            return id
+        return self._create_data(obj)
 
     def _create_and_register(self, obj, job_type, section, section_title):
         if not section:
@@ -91,17 +97,21 @@ class Job(AbstractJob):
     def _make_filepath(self, fk, job_type):
         return f"{self.doc.name}_{fk}_{job_type}"
 
-    async def write_rows(self):
-        if not self._data:
-            logger.info(f"no data {self.fk}, {self.job_type.name}")
-            return 
-        
-        header = self._data[0].header
-        csv_rows = '\n'.join([obj.to_csv_row for obj in self._data])
+    async def write_rows(self, filetype='csv'):
+        # header = self._data[0].header
+        # csv_rows = '\n'.join([obj.to_csv_row for obj in self._data])
         await self.writer.write(WriteEvent(type='insert', 
-                                           info={'filename': f"{self.job_type.name}.csv", 
-                                                 'data': csv_rows,
-                                                 'header': header}))
+                                           info={'filetype': filetype, 
+                                                 'filename': self.job_type.name, 
+                                                 'data': self._data}))
+
+    # async def write_json(self):
+    #     data_dicts = [obj.to_dict() for obj in self._data]
+    #     header = list(self._data[0].to_dict().keys())
+    #     await self.writer.write(WriteEvent(type='insert', 
+    #                                        info={'filename': f"{self.job_type.name}.csv", 
+    #                                              'data': data_dicts,
+    #                                              'header': header}))
 
     async def write_section(self, filepath, section):
         await self.writer.write(WriteEvent(type='tmp', 
@@ -129,7 +139,7 @@ class AbstractProcessor:
     def _process_lines(self, content: any): 
         raise NotImplementedError
 
-    def _process_data(self, data: dict):
+    def _register_data(self, data: dict):
         raise NotImplementedError
 
     def _update_data(self, data: dict, obj: dict): 

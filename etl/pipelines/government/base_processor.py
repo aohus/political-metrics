@@ -34,9 +34,9 @@ class BaseProcessor(job.AbstractProcessor):
             elif parsed.event == 'create_data':
                 yield (parsed.event, parsed.data)
             elif parsed.event == 'register_job':
-                yield self._process_data(parsed)
-            elif parsed.event == '':
-                yield self._pick_event(parsed)
+                yield self._register_data(parsed)
+            elif parsed.event == 'process_data':
+                yield self._process_data(**parsed.data)
             else:
                 logger.error(f'invalid event {parsed.event}')
 
@@ -47,7 +47,11 @@ class BaseProcessor(job.AbstractProcessor):
         """update data logic"""
         pass
 
-    def _process_data(self, parsed):
+    def _process_data(self, **parsed_data) -> tuple[Optional[dict], dict]:
+        """update data logic"""
+        pass
+
+    def _register_data(self, parsed):
         title = parsed.data.get('section_title')
         parsed.data['job_type'] = self._get_job_type(title)
         return (parsed.event, parsed.data)
@@ -59,7 +63,7 @@ class BaseProcessor(job.AbstractProcessor):
 
 class BaseParser(job.AbstractParser):
     def __init__(self):
-        self.compiler = re.compile(r'([ㅇ◦□]\s*.+?)(?=ㅇ|◦|□|$)', re.DOTALL | re.IGNORECASE)
+        self.compiler = re.compile(r'(\s*[^가-힣0-9a-zA-Z]\s*.+?\n)(?=\s*[^가-힣0-9a-zA-Z]|$)', re.DOTALL | re.IGNORECASE)
 
     def create_lines(self, content: str):
         if content:

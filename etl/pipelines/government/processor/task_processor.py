@@ -8,11 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class TaskProcessor(BaseProcessor):
-    def _process_data(self, parsed):
-        title = parsed.data.get('section_title')
-        parsed.data['job_type'] = self._get_job_type(title)
-        return (parsed.event, parsed.data)
-
     def _get_job_type(self, title: str):
         job_map = {
             '추진': 'background',
@@ -24,6 +19,7 @@ class TaskProcessor(BaseProcessor):
             '22': 'plan',
             '23': 'plan',
             '24': 'plan',
+            '25': 'plan',
         }
         if title[0:2] in job_map.keys():
             return job_map.get(title[0:2])
@@ -32,9 +28,9 @@ class TaskProcessor(BaseProcessor):
 class TaskParser(BaseParser):
     def __init__(self):
         self.compiler = re.compile(
-            r'□?\s*(?P<section_title>추진\s*배경\s*.*?|주요\s*내용.*?|수혜자\s*및.*?|기대\s*효과.*?|관련\s*재정.*?|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획.*?)'
-            r'\n(?P<section_content>.*?)'
-            r'(?=(?:□\s*)추진\s*배경|주요\s*내용\s*및|[^\(]수혜자\s*및|이해관계자\s등|성과지표\s*및|수혜자\s*체감도|기대\s*효과|관련\s*재정|[1-9]{0,2}\s*년도\s*과제\s*추진\s*계획|$)'
+            r'□?\s*(?P<section_title>추진\s*배경.*?|주요\s*내용.*?|수혜자\s*및.*?|기대\s*효과.*?|관련\s*재정.*?(?!없음)|[0-9]{0,2}\s*년도\s*과제\s*추진\s*계획.*?)'
+            r'\n(?P<section>.*?)'
+            r'(?=□?\s*(?:추진\s*배경|주요\s*내용\s*및|[^\(]수혜자\s*및|이해관계자\s등|성과지표\s*및|수혜자\s*체감도|기대\s*효과|관련\s*재정|[0-9]{0,2}\s*년도\s*과제\s*추진\s*계획)|$)'
             , re.DOTALL | re.IGNORECASE)
 
     def _create_lines(self, content: str):
@@ -59,9 +55,11 @@ class TaskParser(BaseParser):
         for line in lines:
             title, no, section = line.groups()
             title = title.replace('\n', '')
+
             for section_title, section in self.compiler.findall(section):
-                if not section or len(section) < 20:
-                    logger.error(f"task title: '{title}' has no section({section[0:10] if section else section}), section_title({section_title})")
+                if not section_title or len(section) < 20:
+                    if section.replace('\n', ''):
+                        logger.error(f"'{section_title}' has too short section({section}) - task title: '{title}'")
                     continue
                 yield ParsedInfo(event='register_job', 
                                  data={'obj': {'title': title, 'no': no},

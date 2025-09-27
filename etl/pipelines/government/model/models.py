@@ -26,15 +26,15 @@ class BaseDataObject:
             keys = [f.name for f in fields(self)]
         else:
             keys = list(self.__dict__.keys())
-        return ", ".join(keys)
+        return ",".join(keys)
 
     @property
     def to_csv_row(self):
         if hasattr(self, '__dataclass_fields__'):
-            values = [str(getattr(self, f.name)) for f in fields(self)]
+            values = [str(getattr(self, f.name)).replace(',', '') for f in fields(self)]
         else:
             values = [str(v) for v in self.__dict__.values()]
-        return ", ".join(values)
+        return ",".join(values)
 
 
 # ============================================================================
@@ -43,6 +43,7 @@ class BaseDataObject:
 @dataclass
 class Goal(BaseDataObject):
     fk: str
+    no: str
     title: str
     id: str = field(default_factory=generate_short_id)
     # goal_num: str
@@ -52,7 +53,8 @@ class Goal(BaseDataObject):
         return {
             '사업연도': year,
             '소관': ministry,
-            '성과목표번호': self.title,
+            '성과목표번호': self.no,
+            '성과목표': self.title,
             'ID': self.id,
             # '성과목표': self.goal,
         }
@@ -129,15 +131,13 @@ class CategoryType(Enum):
 @dataclass
 class FinanceBusiness(BaseDataObject):
     fk: str
-    subject: str
-    category: Optional[str] = None
+    subject: str = None
     finance_code: Optional[str] = None
-    subsidy_code: Optional[str] = None
+    # subsidy_code: Optional[str] = None
     program: Optional[str] = None
     unit: Optional[str] = None
     sunit: Optional[str] = None
-    ssunit: Optional[list] = None
-    sssunit: Optional[list] = None
+    items: Optional[list] = None
     extra: Optional[list] = None
     id: str = field(default_factory=generate_short_id)
 
@@ -145,13 +145,29 @@ class FinanceBusiness(BaseDataObject):
         return {
             '관리과제ID': self.fk,
             '주제': self.subject,
-            '회계구분': self.category,
+            # '회계구분': self.category,
+            # '교부금코드': self.subsidy_code,
             '회계코드': self.finance_code,
-            '교부금코드': self.subsidy_code,
             '프로그램명': self.program,
             '단위사업명': self.unit,
-            '내역사업명': self.sunit,
-            '내내역사업목록': self.ssunit,
+            '세부사업명': self.sunit,
+            '내역사업목록': self.items,
+            '비고': self.extra,
+            'ID': self.id,
+        }
+
+
+@dataclass
+class FinanceBusinessDetails(BaseDataObject):
+    fk: str
+    item: str = None
+    extra: Optional[list] = None
+    id: str = field(default_factory=generate_short_id)
+
+    def to_dict(self):
+        return {
+            '재정사업ID': self.fk,
+            '내역사업명': self.ssunit,
             '특교사업목록': self.sssunit,
             '비고': self.extra,
             'ID': self.id,

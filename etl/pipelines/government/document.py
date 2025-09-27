@@ -34,15 +34,18 @@ logger = logging.getLogger(__name__)
 
 
 class Document:
-    def __init__(self, name, jobloop, job_configs, reader, writer):
+    def __init__(self, _jobloop, name, job_configs, reader, writer):
+        self._jobloop = _jobloop
         self.name = name
-        self.jobloop = jobloop
         self.job_configs = job_configs
         self.reader = reader
         self.writer = writer
         self.results = None
         self.ready_queue = asyncio.Queue()
-        self.jobloop.docs.append(self)
+        self._jobloop.docs.append(self)
+
+    # async def run(self, fk, filepath):
+    #     self.register(fk=fk, job_type='initial', filepath=filepath)
 
     def register(self, fk: str, job_type: JobType, filepath: str = None):
         if isinstance(job_type, str):
